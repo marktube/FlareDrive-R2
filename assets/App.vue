@@ -86,21 +86,23 @@
 
       <input type="search" v-model="search" aria-label="Search" placeholder="🍿 输入以全局搜索文件" class="search-input" />
 
-      <!-- 登录/用户状态按钮 -->
-      <div class="user-status-container">
-        <button class="user-status-button" @click="showLoginModal" :title="isLoggedIn ? '切换用户' : '登录'">
-          <svg v-if="!isLoggedIn" viewBox="0 0 24 24" width="18" height="18" fill="#666">
-            <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
-          </svg>
-          <!-- 已登录状态的图标 -->
-          <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="#4CAF50">
-            <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
-          </svg>
-          <span class="user-status-text">{{ isLoggedIn ? (isGuest ? '游客' : '已登录') : '登录' }}</span>
-        </button>
-      </div>
+      <!-- 右侧控件容器 -->
+      <div class="app-bar-right">
+        <!-- 登录/用户状态按钮 -->
+        <div class="user-status-container">
+          <button class="user-status-button" @click="showLoginModal" :title="isLoggedIn ? '切换用户' : '登录'">
+            <svg v-if="!isLoggedIn" viewBox="0 0 24 24" width="18" height="18" fill="#666">
+              <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+            </svg>
+            <!-- 已登录状态的图标 -->
+            <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="#4CAF50">
+              <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+            </svg>
+            <span class="user-status-text">{{ isLoggedIn ? (isGuest ? '游客' : '已登录') : '登录' }}</span>
+          </button>
+        </div>
 
-      <div class="menu-button">
+        <div class="menu-button">
         <button class="circle" @click="showMenu = true" style="display: flex; align-items: center;background-color: rgb(245, 245, 245);">
           <p style="
               white-space: nowrap;
@@ -121,6 +123,7 @@
         <Menu v-model="showMenu"
           :items="[{ text: '按照名称排序A-Z' }, { text: '按照大小递增排序' }, { text: '按照大小递减排序' }, { text: '粘贴文件到网盘' }]"
           @click="onMenuClick" />
+        </div>
       </div>
     </div>
     <div class="file-list-container">
@@ -345,6 +348,15 @@ export default {
     },
   },
 
+  mounted() {
+    // 检查是否有保存的认证信息
+    const savedCredentials = localStorage.getItem('authCredentials');
+    if (savedCredentials) {
+      this.setAuthHeader(savedCredentials);
+    }
+    this.fetchFiles();
+  },
+
   methods: {
     copyLink(link) {
       const url = new URL(link, window.location.origin);
@@ -382,7 +394,14 @@ export default {
       this.loading = true;
       this.needLogin = false;
 
-      fetch(`/api/children/${this.cwd}`)
+      // 准备请求头
+      const headers = {};
+      const savedCredentials = localStorage.getItem('authCredentials');
+      if (savedCredentials) {
+        headers['Authorization'] = `Basic ${savedCredentials}`;
+      }
+
+      fetch(`/api/children/${this.cwd}`, { headers })
         .then((res) => res.json())
         .then((data) => {
           if (data.needLogin) {
@@ -467,8 +486,8 @@ export default {
         // 创建Basic Auth头
         const credentials = btoa(`${this.loginForm.username}:${this.loginForm.password}`);
 
-        // 尝试访问需要权限的API
-        const response = await fetch('/api/write/', {
+        // 尝试访问需要权限的API - 使用test端点验证登录
+        const response = await fetch('/api/write/test/', {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${credentials}`,
@@ -477,7 +496,8 @@ export default {
         });
 
         if (response.ok) {
-          // 登录成功
+          // 登录成功，设置认证头到全局
+          this.setAuthHeader(credentials);
           this.closeModal();
           this.fetchFiles(); // 刷新文件列表
         } else {
@@ -488,6 +508,25 @@ export default {
         console.error('登录错误:', error);
       } finally {
         this.loginLoading = false;
+      }
+    },
+
+    // 设置认证头
+    setAuthHeader(credentials) {
+      // 将认证信息存储到localStorage，以便后续请求使用
+      localStorage.setItem('authCredentials', credentials);
+
+      // 设置默认的axios请求头
+      if (window.axios) {
+        window.axios.defaults.headers.common['Authorization'] = `Basic ${credentials}`;
+      }
+    },
+
+    // 清除认证头
+    clearAuthHeader() {
+      localStorage.removeItem('authCredentials');
+      if (window.axios) {
+        delete window.axios.defaults.headers.common['Authorization'];
       }
     },
 
@@ -504,6 +543,7 @@ export default {
 
     // 退出登录
     logout() {
+      this.clearAuthHeader(); // 清除认证信息
       this.isLoggedIn = false;
       this.isGuest = true;
       this.needLogin = false;

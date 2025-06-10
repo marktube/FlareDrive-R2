@@ -479,7 +479,7 @@ button {
 
 /* 用户状态按钮样式 */
 .user-status-container {
-  margin: 0 10px;
+  flex-shrink: 0;
 }
 
 .user-status-button {
@@ -522,6 +522,14 @@ button {
 
 .app-title-container {
   flex-shrink: 0;
+}
+
+/* 右侧控件容器 */
+.app-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
 }
 
 /* 调整搜索框样式 */
