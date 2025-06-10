@@ -84,7 +84,19 @@
         <h1 class="app-title" style="font-size: 20px;margin: 0 25px 0 8px; user-select: none;">FlareDrive</h1>
       </a>
 
-      <input type="search" v-model="search" aria-label="Search" placeholder="🍿 输入以全局搜索文件" class="search-input" />
+      <div class="search-container" :class="{ 'search-expanded': isSearchExpanded }">
+        <input
+          type="search"
+          v-model="search"
+          @input="onSearchInput"
+          @focus="onSearchFocus"
+          @blur="onSearchBlur"
+          aria-label="Search"
+          placeholder="🍿 输入以全局搜索文件"
+          class="search-input"
+          ref="searchInput"
+        />
+      </div>
 
       <!-- 右侧控件容器 -->
       <div class="app-bar-right">
@@ -304,6 +316,7 @@ export default {
     searchResults: [], // 全局搜索结果
     isSearching: false, // 搜索状态
     searchTimeout: null, // 搜索防抖定时器
+    isSearchExpanded: false, // 搜索框是否展开
     showContextMenu: false,
     showMenu: false,
     showUploadPopup: false,
@@ -391,6 +404,60 @@ export default {
   },
 
   methods: {
+    // 搜索输入处理
+    onSearchInput() {
+      // 清除之前的定时器
+      if (this.searchTimeout) {
+        clearTimeout(this.searchTimeout);
+      }
+
+      // 如果搜索框为空，清空结果并收回搜索框
+      if (!this.search.trim()) {
+        this.searchResults = [];
+        this.isSearching = false;
+        this.isSearchExpanded = false;
+        return;
+      }
+
+      // 设置新的定时器，防抖处理
+      this.searchTimeout = setTimeout(() => {
+        this.performSearch();
+      }, 300);
+    },
+
+    // 搜索框获得焦点
+    onSearchFocus() {
+      this.isSearchExpanded = true;
+    },
+
+    // 搜索框失去焦点
+    onSearchBlur() {
+      // 延迟收回，避免点击搜索结果时立即收回
+      setTimeout(() => {
+        if (!this.search.trim()) {
+          this.isSearchExpanded = false;
+        }
+      }, 200);
+    },
+
+    // 执行搜索
+    async performSearch() {
+      if (!this.search.trim()) return;
+
+      this.isSearching = true;
+      try {
+        // 这里可以实现实际的搜索逻辑
+        // 暂时使用本地过滤作为示例
+        this.searchResults = this.files.filter(file =>
+          file.key.toLowerCase().includes(this.search.toLowerCase())
+        );
+      } catch (error) {
+        console.error('搜索失败:', error);
+      } finally {
+        this.isSearching = false;
+      }
+    },
+
     copyLink(link) {
       const url = new URL(link, window.location.origin);
       navigator.clipboard.writeText(url.toString());

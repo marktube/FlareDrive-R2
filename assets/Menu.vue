@@ -53,8 +53,10 @@ const emit = defineEmits(["update:modelValue", "click"]);
   background-color: white;
   z-index: 2;
   border-radius: 6px;
-  right: -100%;
+  right: 0;
   min-width: 168px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .menu-content li {
@@ -65,5 +67,30 @@ const emit = defineEmits(["update:modelValue", "click"]);
 
 .menu-content li:hover {
   background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 移动端菜单优化 */
+@media (max-width: 768px) {
+  .menu-content {
+    right: -10px; /* 稍微向左偏移，避免贴边 */
+    min-width: 180px;
+    font-size: 16px; /* 增大字体，便于触摸 */
+  }
+
+  .menu-content li {
+    padding: 14px 16px; /* 增大触摸区域 */
+  }
+}
+
+@media (max-width: 480px) {
+  .menu-content {
+    right: -5px;
+    min-width: 160px;
+  }
+
+  .menu-content li {
+    padding: 12px 14px;
+    font-size: 15px;
+  }
 }
 </style>
