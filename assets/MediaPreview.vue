@@ -243,12 +243,24 @@ export default {
     isImage() {
       const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
       const ext = this.currentMedia.name?.split('.').pop()?.toLowerCase();
-      return imageTypes.includes(ext);
+      const result = imageTypes.includes(ext);
+      console.log('isImage computed:', {
+        name: this.currentMedia.name,
+        ext: ext,
+        result: result
+      });
+      return result;
     },
     isVideo() {
       const videoTypes = ['mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
       const ext = this.currentMedia.name?.split('.').pop()?.toLowerCase();
-      return videoTypes.includes(ext);
+      const result = videoTypes.includes(ext);
+      console.log('isVideo computed:', {
+        name: this.currentMedia.name,
+        ext: ext,
+        result: result
+      });
+      return result;
     },
     imageStyle() {
       return {
