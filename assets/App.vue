@@ -9,11 +9,52 @@
     <UploadPopup v-model="showUploadPopup" @upload="onUploadClicked" @createFolder="createFolder"></UploadPopup>
 
     <!-- 登录按钮 -->
-    <button v-if="!isLoggedIn" class="login-button circle" @click="triggerLogin">
+    <button v-if="!isLoggedIn" class="login-button circle" @click="showLoginModal">
       <svg viewBox="0 0 24 24" width="24" height="24" fill="#e6e6e6">
         <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
       </svg>
     </button>
+
+    <!-- 登录模态框 -->
+    <div v-if="showModal" class="modal-overlay" @click="closeModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>登录</h3>
+          <button class="close-button" @click="closeModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="handleLogin">
+            <div class="form-group">
+              <label for="username">用户名:</label>
+              <input
+                type="text"
+                id="username"
+                v-model="loginForm.username"
+                required
+                autocomplete="username"
+              >
+            </div>
+            <div class="form-group">
+              <label for="password">密码:</label>
+              <input
+                type="password"
+                id="password"
+                v-model="loginForm.password"
+                required
+                autocomplete="current-password"
+              >
+            </div>
+            <div class="form-actions">
+              <button type="button" @click="closeModal" class="cancel-button">取消</button>
+              <button type="submit" class="login-submit-button" :disabled="loginLoading">
+                {{ loginLoading ? '登录中...' : '登录' }}
+              </button>
+            </div>
+          </form>
+          <div v-if="loginError" class="error-message">{{ loginError }}</div>
+        </div>
+      </div>
+    </div>
 
     <!-- 上传按钮 - 只有登录用户或有上传权限的游客才显示 -->
     <button v-if="canUpload" class="upload-button circle" @click="showUploadPopup = true">
@@ -235,7 +276,15 @@ export default {
     backgroundImageUrl: "/assets/bg-light.webp",
     needLogin: false,
     isGuest: false,
-    isLoggedIn: false
+    isLoggedIn: false,
+    // 模态框相关
+    showModal: false,
+    loginForm: {
+      username: '',
+      password: ''
+    },
+    loginLoading: false,
+    loginError: ''
   }),
 
   computed: {
@@ -306,29 +355,21 @@ export default {
       this.needLogin = false;
 
       fetch(`/api/children/${this.cwd}`)
-        .then((res) => {
-          if (res.status === 401) {
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.needLogin) {
             // 需要登录 - 静默处理，不弹出登录框
-            return res.json().then(data => {
-              this.needLogin = true;
-              this.isLoggedIn = false;
-              this.isGuest = true;
-              this.loading = false;
-              return null; // 返回 null 而不是抛出错误
-            });
-          }
-          return res.json();
-        })
-        .then((files) => {
-          if (files === null) {
-            // 处理需要登录的情况，不做任何操作
+            this.needLogin = true;
+            this.isLoggedIn = false;
+            this.isGuest = true;
+            this.loading = false;
             return;
           }
 
           this.needLogin = false;
-          this.files = files.value || [];
-          this.folders = files.folders || [];
-          this.isGuest = files.isGuest || false;
+          this.files = data.value || [];
+          this.folders = data.folders || [];
+          this.isGuest = data.isGuest || false;
           this.isLoggedIn = !this.isGuest;
 
           if (this.order) {
@@ -374,22 +415,57 @@ export default {
       this.uploadFiles(files);
     },
 
-    // 触发登录
-    triggerLogin() {
-      // 通过尝试访问一个需要权限的API来触发浏览器的Basic Auth对话框
-      fetch('/api/write/test/', {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
-      }).then(response => {
+    // 显示登录模态框
+    showLoginModal() {
+      this.showModal = true;
+      this.loginError = '';
+      this.loginForm.username = '';
+      this.loginForm.password = '';
+    },
+
+    // 关闭登录模态框
+    closeModal() {
+      this.showModal = false;
+      this.loginError = '';
+      this.loginLoading = false;
+    },
+
+    // 处理登录
+    async handleLogin() {
+      this.loginLoading = true;
+      this.loginError = '';
+
+      try {
+        // 创建Basic Auth头
+        const credentials = btoa(`${this.loginForm.username}:${this.loginForm.password}`);
+
+        // 尝试访问需要权限的API
+        const response = await fetch('/api/write/', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Cache-Control': 'no-cache'
+          }
+        });
+
         if (response.ok) {
-          // 登录成功，刷新文件列表
-          this.fetchFiles();
+          // 登录成功
+          this.closeModal();
+          this.fetchFiles(); // 刷新文件列表
+        } else {
+          this.loginError = '用户名或密码错误';
         }
-      }).catch(error => {
-        console.log('登录取消或失败');
-      });
+      } catch (error) {
+        this.loginError = '登录失败，请重试';
+        console.error('登录错误:', error);
+      } finally {
+        this.loginLoading = false;
+      }
+    },
+
+    // 触发登录（保留原方法用于拖拽上传时的登录）
+    triggerLogin() {
+      this.showLoginModal();
     },
 
     onMenuClick(text) {

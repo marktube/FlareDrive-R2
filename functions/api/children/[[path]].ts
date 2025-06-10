@@ -11,17 +11,14 @@ export async function onRequestGet(context) {
     const authResult = get_list_auth_status(context, path || "");
 
     if (!authResult.hasAccess) {
-      // 没有权限访问，返回需要登录的响应
-      var header = new Headers()
-      header.set("WWW-Authenticate",'Basic realm="需要登录"')
+      // 没有权限访问，返回需要登录的响应（不包含WWW-Authenticate头，避免弹出浏览器登录框）
       return new Response(JSON.stringify({
         needLogin: true,
         message: "需要登录才能查看文件列表"
       }), {
-        status: 401,
+        status: 200, // 改为200状态码，避免触发浏览器登录框
         headers: {
-          "Content-Type": "application/json",
-          "WWW-Authenticate": 'Basic realm="需要登录"'
+          "Content-Type": "application/json"
         },
       });
     }
