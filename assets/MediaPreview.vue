@@ -5,6 +5,7 @@
       <div v-if="loading" class="loading-indicator">
         <div class="spinner"></div>
         <p>加载中...</p>
+        <p style="font-size: 12px; opacity: 0.7;">{{ currentMedia.url }}</p>
       </div>
 
       <!-- 图片预览 -->
@@ -242,8 +243,16 @@ export default {
   },
   watch: {
     show(newVal) {
+      console.log('MediaPreview show changed:', newVal);
       if (newVal) {
+        console.log('MediaPreview opening with:', {
+          mediaList: this.mediaList,
+          initialIndex: this.initialIndex,
+          currentMedia: this.currentMedia
+        });
         this.currentIndex = this.initialIndex;
+        this.loading = true; // 显示时开始加载
+        this.error = false;
         this.resetImage();
         this.detectMobile();
         document.addEventListener('keydown', this.handleKeydown);
@@ -253,10 +262,17 @@ export default {
         document.body.style.overflow = '';
       }
     },
-    currentIndex() {
+    currentIndex(newVal) {
+      console.log('MediaPreview currentIndex changed:', newVal, 'currentMedia:', this.currentMedia);
       this.loading = true;
       this.error = false;
       this.resetImage();
+    },
+    initialIndex(newVal) {
+      console.log('MediaPreview initialIndex changed:', newVal);
+      if (this.show) {
+        this.currentIndex = newVal;
+      }
     }
   },
   methods: {
@@ -266,19 +282,23 @@ export default {
     
     // 媒体加载处理
     onImageLoad() {
+      console.log('图片加载成功:', this.currentMedia.url);
       this.loading = false;
       this.error = false;
     },
     onVideoLoad() {
+      console.log('视频加载成功:', this.currentMedia.url);
       this.loading = false;
       this.error = false;
     },
     onImageError() {
+      console.log('图片加载失败:', this.currentMedia.url);
       this.loading = false;
       this.error = true;
       this.errorMessage = '图片加载失败';
     },
     onVideoError() {
+      console.log('视频加载失败:', this.currentMedia.url);
       this.loading = false;
       this.error = true;
       this.errorMessage = '视频加载失败';
