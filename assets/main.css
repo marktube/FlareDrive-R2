@@ -542,3 +542,12 @@ input[type="search"].search-input {
   margin-right: 10px;
   flex: 1;
 }
+
+/* 搜索结果样式 */
+.file-path {
+  color: #666;
+  font-size: 12px;
+  font-style: italic;
+  display: block;
+  margin-top: 2px;
+}

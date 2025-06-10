@@ -25,7 +25,7 @@
                 <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
               </svg>
               <div>
-                <p class="user-status">{{ isGuest ? '游客模式' : '已登录' }}</p>
+                <p class="user-status">{{ isGuest ? '游客模式' : (currentUser ? currentUser.username + ' 已登录' : '已登录') }}</p>
                 <p class="user-desc">{{ isGuest ? '只能查看文件' : '可以上传和管理文件' }}</p>
               </div>
             </div>
@@ -179,18 +179,20 @@
           </div>
         </li>
         <li v-for="file in filteredFiles" :key="file.key">
-          <div @click="preview(`/raw/${file.key}`)" @contextmenu.prevent="
+          <div @click="handleFileClick(file)" @contextmenu.prevent="
             showContextMenu = true;
           focusedItem = file;" class="file-item" style="position: relative;">
-            <MimeIcon :content-type="file.httpMetadata.contentType" :thumbnail="file.customMetadata.thumbnail
+            <MimeIcon :content-type="file.httpMetadata?.contentType || 'application/octet-stream'" :thumbnail="file.customMetadata?.thumbnail
               ? `/raw/_$flaredrive$/thumbnails/${file.customMetadata.thumbnail}.png`
               : null
               " />
             <div class="file-info-container">
               <div class="file-name" v-text="file.key.split('/').pop()"></div>
               <div class="file-attr">
-                <span v-text="new Date(file.uploaded).toLocaleString()"></span>
-                <span v-text="formatSize(file.size)"></span>
+                <!-- 搜索结果显示完整路径 -->
+                <span v-if="search && searchResults.length > 0" class="file-path" v-text="file.displayPath || file.key"></span>
+                <span v-if="file.uploaded" v-text="new Date(file.uploaded).toLocaleString()"></span>
+                <span v-if="file.size" v-text="formatSize(file.size)"></span>
               </div>
             </div>
             <div style="margin-right: 10px;margin-left: auto;" @click.stop="
@@ -299,6 +301,9 @@ export default {
     loading: false,
     order: null,
     search: "",
+    searchResults: [], // 全局搜索结果
+    isSearching: false, // 搜索状态
+    searchTimeout: null, // 搜索防抖定时器
     showContextMenu: false,
     showMenu: false,
     showUploadPopup: false,
@@ -321,19 +326,35 @@ export default {
 
   computed: {
     filteredFiles() {
+      // 如果有搜索词且有搜索结果，显示搜索结果
+      if (this.search && this.searchResults.length > 0) {
+        return this.searchResults.filter(item => !item.isFolder);
+      }
+
+      // 否则显示当前目录的文件
       let files = this.files;
-      if (this.search) {
+      if (this.search && !this.isSearching) {
+        // 本地搜索作为备选
         files = files.filter((file) =>
-          file.key.split("/").pop().includes(this.search)
+          file.key.split("/").pop().toLowerCase().includes(this.search.toLowerCase())
         );
       }
       return files;
     },
 
     filteredFolders() {
+      // 如果有搜索词且有搜索结果，显示搜索结果中的文件夹
+      if (this.search && this.searchResults.length > 0) {
+        return this.searchResults.filter(item => item.isFolder).map(item => item.key);
+      }
+
+      // 否则显示当前目录的文件夹
       let folders = this.folders;
-      if (this.search) {
-        folders = folders.filter((folder) => folder.includes(this.search));
+      if (this.search && !this.isSearching) {
+        // 本地搜索作为备选
+        folders = folders.filter((folder) =>
+          folder.toLowerCase().includes(this.search.toLowerCase())
+        );
       }
       return folders;
     },
@@ -400,21 +421,11 @@ export default {
       const savedCredentials = localStorage.getItem('authCredentials');
       if (savedCredentials) {
         headers['Authorization'] = `Basic ${savedCredentials}`;
-        console.log('发送认证头:', headers['Authorization']);
-      } else {
-        console.log('没有找到保存的认证信息');
       }
 
-      console.log('fetchFiles 请求URL:', `/api/children/${this.cwd}`);
-      console.log('fetchFiles 请求头:', headers);
-
       fetch(`/api/children/${this.cwd}`, { headers })
-        .then((res) => {
-          console.log('fetchFiles 响应状态:', res.status);
-          return res.json();
-        })
+        .then((res) => res.json())
         .then((data) => {
-          console.log('fetchFiles 响应数据:', data);
           if (data.needLogin) {
             // 需要登录 - 静默处理，不弹出登录框
             this.needLogin = true;
@@ -542,8 +553,6 @@ export default {
       if (window.axios) {
         window.axios.defaults.headers.common['Authorization'] = `Basic ${credentials}`;
       }
-
-      console.log('认证信息已保存到localStorage:', credentials);
     },
 
     // 清除认证头
@@ -615,6 +624,21 @@ export default {
 
     preview(filePath) {
       window.open(filePath);
+    },
+
+    // 处理文件点击（区分搜索结果和普通文件）
+    handleFileClick(file) {
+      if (this.search && this.searchResults.length > 0) {
+        // 搜索结果：跳转到文件所在目录
+        const filePath = file.displayPath || file.key;
+        const directory = filePath.substring(0, filePath.lastIndexOf('/') + 1);
+        this.search = ''; // 清除搜索
+        this.searchResults = [];
+        this.cwd = directory;
+      } else {
+        // 普通文件：预览
+        this.preview(`/raw/${file.key}`);
+      }
     },
 
     async pasteFile() {
@@ -866,11 +890,95 @@ export default {
       this.uploadQueue.push(...uploadTasks);
       setTimeout(() => this.processUploadQueue());
     },
+
+    // 全局搜索功能
+    async performGlobalSearch(searchTerm) {
+      if (!searchTerm || searchTerm.length < 2) {
+        this.searchResults = [];
+        return;
+      }
+
+      this.isSearching = true;
+      this.searchResults = [];
+
+      try {
+        // 递归搜索所有目录
+        const results = await this.searchInDirectory('', searchTerm);
+        this.searchResults = results;
+      } catch (error) {
+        console.error('全局搜索失败:', error);
+      } finally {
+        this.isSearching = false;
+      }
+    },
+
+    // 在指定目录中搜索
+    async searchInDirectory(directory, searchTerm) {
+      const results = [];
+
+      try {
+        // 准备请求头
+        const headers = {};
+        const savedCredentials = localStorage.getItem('authCredentials');
+        if (savedCredentials) {
+          headers['Authorization'] = `Basic ${savedCredentials}`;
+        }
+
+        const response = await fetch(`/api/children/${directory}`, { headers });
+        const data = await response.json();
+
+        if (data.needLogin) {
+          return results;
+        }
+
+        // 搜索文件
+        if (data.value) {
+          for (const file of data.value) {
+            const fileName = file.key.split('/').pop();
+            if (fileName.toLowerCase().includes(searchTerm.toLowerCase())) {
+              results.push({
+                ...file,
+                isFolder: false,
+                displayPath: file.key
+              });
+            }
+          }
+        }
+
+        // 搜索文件夹并递归
+        if (data.folders) {
+          for (const folder of data.folders) {
+            const folderName = folder.split('/').filter(Boolean).pop();
+
+            // 如果文件夹名匹配搜索词，添加到结果
+            if (folderName && folderName.toLowerCase().includes(searchTerm.toLowerCase())) {
+              results.push({
+                key: folder,
+                isFolder: true,
+                displayPath: folder
+              });
+            }
+
+            // 递归搜索子目录（限制深度避免无限递归）
+            if (folder.split('/').length < 5) { // 最多搜索5层深度
+              const subResults = await this.searchInDirectory(folder, searchTerm);
+              results.push(...subResults);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`搜索目录 ${directory} 失败:`, error);
+      }
+
+      return results;
+    },
   },
 
   watch: {
     cwd: {
       handler() {
+        // 切换目录时清除搜索结果
+        this.searchResults = [];
         this.fetchFiles();
         const url = new URL(window.location);
         if ((url.searchParams.get("p") || "") !== this.cwd) {
@@ -879,12 +987,26 @@ export default {
             : url.searchParams.delete("p");
           window.history.pushState(null, "", url.toString());
         }
-        document.title = this.cwd.replace(/.*\/(?!$)|\//g, "") === "/" 
+        document.title = this.cwd.replace(/.*\/(?!$)|\//g, "") === "/"
             ? "FlareDrive-R2 - 优雅的 Cloudflare R2 网盘文件库"
             :`${this.cwd.replace(/.*\/(?!$)|\//g, "") || "/" } - 优雅的 Cloudflare R2 网盘文件库`;
       },
       immediate: true,
     },
+
+    search: {
+      handler(newVal) {
+        // 防抖搜索
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = setTimeout(() => {
+          if (newVal && newVal.length >= 2) {
+            this.performGlobalSearch(newVal);
+          } else {
+            this.searchResults = [];
+          }
+        }, 500); // 500ms 防抖
+      }
+    }
   },
 
   created() {
