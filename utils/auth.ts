@@ -33,22 +33,39 @@ export function get_auth_status(context) {
 export function get_list_auth_status(context, path = "") {
     var headers = new Headers(context.request.headers);
 
+    console.log('get_list_auth_status - path:', path);
+    console.log('get_list_auth_status - Authorization header:', headers.get('Authorization'));
+
     // 检查是否有登录用户
     if(headers.get('Authorization')) {
         const Authorization = headers.get('Authorization').split("Basic ")[1]
         const account = atob(Authorization);
+        console.log('get_list_auth_status - decoded account:', account);
+        console.log('get_list_auth_status - env[account] exists:', !!context.env[account]);
+
         if(account && context.env[account]) {
             // 已登录用户，检查目录权限
             const allow = context.env[account].split(",")
+            console.log('get_list_auth_status - user permissions:', allow);
+            console.log('get_list_auth_status - checking path:', path);
+
             for (var a of allow){
+                console.log('get_list_auth_status - checking permission:', a, 'against path:', path);
                 if(a == "*"){
+                    console.log('get_list_auth_status - admin access granted');
                     return { hasAccess: true, isGuest: false };
                 }else if(path.startsWith(a)){
+                    console.log('get_list_auth_status - path access granted');
                     return { hasAccess: true, isGuest: false };
                 }
             }
+            console.log('get_list_auth_status - no matching permissions');
             return { hasAccess: false, isGuest: false };
+        } else {
+            console.log('get_list_auth_status - account not found or invalid');
         }
+    } else {
+        console.log('get_list_auth_status - no Authorization header');
     }
 
     // 未登录用户，检查游客权限
