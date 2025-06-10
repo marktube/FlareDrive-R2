@@ -375,6 +375,8 @@ export default {
     const savedCredentials = localStorage.getItem('authCredentials');
     if (savedCredentials) {
       this.setAuthHeader(savedCredentials);
+      // 恢复用户信息
+      this.restoreUserInfo();
     }
     this.fetchFiles();
   },
@@ -521,8 +523,8 @@ export default {
         const data = await response.json();
 
         if (data.success) {
-          // 登录成功，设置认证头到全局
-          this.setAuthHeader(credentials);
+          // 登录成功，设置认证头到全局并保存用户信息
+          this.setAuthHeader(credentials, data.user);
           this.currentUser = data.user; // 保存用户信息
           this.isLoggedIn = true;
           this.isGuest = false;
@@ -545,9 +547,14 @@ export default {
     },
 
     // 设置认证头
-    setAuthHeader(credentials) {
+    setAuthHeader(credentials, userInfo = null) {
       // 将认证信息存储到localStorage，以便后续请求使用
       localStorage.setItem('authCredentials', credentials);
+
+      // 如果提供了用户信息，也保存到localStorage
+      if (userInfo) {
+        localStorage.setItem('currentUser', JSON.stringify(userInfo));
+      }
 
       // 设置默认的axios请求头
       if (window.axios) {
@@ -555,9 +562,26 @@ export default {
       }
     },
 
+    // 恢复用户信息
+    restoreUserInfo() {
+      try {
+        const savedUserInfo = localStorage.getItem('currentUser');
+        if (savedUserInfo) {
+          this.currentUser = JSON.parse(savedUserInfo);
+          this.isLoggedIn = true;
+          this.isGuest = false;
+        }
+      } catch (error) {
+        console.error('恢复用户信息失败:', error);
+        // 出错时清除认证信息
+        this.clearAuthHeader();
+      }
+    },
+
     // 清除认证头
     clearAuthHeader() {
       localStorage.removeItem('authCredentials');
+      localStorage.removeItem('currentUser');
       if (window.axios) {
         delete window.axios.defaults.headers.common['Authorization'];
       }
