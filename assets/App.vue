@@ -8,16 +8,7 @@
     <progress v-if="uploadProgress !== null" :value="uploadProgress" max="100"></progress>
     <UploadPopup v-model="showUploadPopup" @upload="onUploadClicked" @createFolder="createFolder"></UploadPopup>
 
-    <!-- 登录/用户按钮 - 始终显示 -->
-    <button class="login-button circle" @click="showLoginModal" :title="isLoggedIn ? '切换用户' : '登录'">
-      <svg v-if="!isLoggedIn" viewBox="0 0 24 24" width="24" height="24" fill="#e6e6e6">
-        <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
-      </svg>
-      <!-- 已登录状态的图标 -->
-      <svg v-else viewBox="0 0 24 24" width="24" height="24" fill="#4CAF50">
-        <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
-      </svg>
-    </button>
+
 
     <!-- 登录/用户模态框 -->
     <div v-if="showModal" class="modal-overlay" @click="closeModal">
@@ -93,7 +84,22 @@
         <h1 class="app-title" style="font-size: 20px;margin: 0 25px 0 8px; user-select: none;">FlareDrive</h1>
       </a>
 
-      <input type="search" v-model="search" aria-label="Search" placeholder="🍿 输入以全局搜索文件" />
+      <input type="search" v-model="search" aria-label="Search" placeholder="🍿 输入以全局搜索文件" class="search-input" />
+
+      <!-- 登录/用户状态按钮 -->
+      <div class="user-status-container">
+        <button class="user-status-button" @click="showLoginModal" :title="isLoggedIn ? '切换用户' : '登录'">
+          <svg v-if="!isLoggedIn" viewBox="0 0 24 24" width="18" height="18" fill="#666">
+            <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+          </svg>
+          <!-- 已登录状态的图标 -->
+          <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="#4CAF50">
+            <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+          </svg>
+          <span class="user-status-text">{{ isLoggedIn ? (isGuest ? '游客' : '已登录') : '登录' }}</span>
+        </button>
+      </div>
+
       <div class="menu-button">
         <button class="circle" @click="showMenu = true" style="display: flex; align-items: center;background-color: rgb(245, 245, 245);">
           <p style="
@@ -125,7 +131,7 @@
             <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
           </svg>
           <h3>当前没有文件或者需要您登录才能查看</h3>
-          <p>如需查看和管理文件，请点击右下角的登录按钮进行身份验证</p>
+          <p>如需查看和管理文件，请点击顶部的登录按钮进行身份验证</p>
         </div>
       </div>
 

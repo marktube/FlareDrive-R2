@@ -476,3 +476,42 @@ button {
 .logout-button:hover {
   background: #d32f2f;
 }
+
+/* 用户状态按钮样式 */
+.user-status-container {
+  margin: 0 10px;
+}
+
+.user-status-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.user-status-button:hover {
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.user-status-text {
+  color: #333;
+  font-weight: 500;
+}
+
+/* 调整搜索框样式 */
+input[type="search"].search-input {
+  background-color: whitesmoke;
+  border: none;
+  border-radius: 16px;
+  max-width: 280px; /* 限制搜索框最大宽度 */
+  padding: 8px 12px;
+  margin-right: 10px;
+}
