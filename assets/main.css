@@ -506,6 +506,24 @@ button {
   font-weight: 500;
 }
 
+/* app-bar 基础样式 */
+.app-bar {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  gap: 15px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.app-title-container {
+  flex-shrink: 0;
+}
+
 /* 调整搜索框样式 */
 input[type="search"].search-input {
   background-color: whitesmoke;
@@ -514,4 +532,5 @@ input[type="search"].search-input {
   max-width: 280px; /* 限制搜索框最大宽度 */
   padding: 8px 12px;
   margin-right: 10px;
+  flex: 1;
 }
