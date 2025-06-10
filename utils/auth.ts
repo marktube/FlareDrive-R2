@@ -28,3 +28,40 @@ export function get_auth_status(context) {
     }
     return false;
   }
+
+// 新增：检查文件列表访问权限
+export function get_list_auth_status(context, path = "") {
+    var headers = new Headers(context.request.headers);
+
+    // 检查是否有登录用户
+    if(headers.get('Authorization')) {
+        const Authorization = headers.get('Authorization').split("Basic ")[1]
+        const account = atob(Authorization);
+        if(account && context.env[account]) {
+            // 已登录用户，检查目录权限
+            const allow = context.env[account].split(",")
+            for (var a of allow){
+                if(a == "*"){
+                    return { hasAccess: true, isGuest: false };
+                }else if(path.startsWith(a)){
+                    return { hasAccess: true, isGuest: false };
+                }
+            }
+            return { hasAccess: false, isGuest: false };
+        }
+    }
+
+    // 未登录用户，检查游客权限
+    if(context.env["GUEST"]){
+        const allow_guest = context.env["GUEST"].split(",")
+        for (var aa of allow_guest){
+            if(aa == "*"){
+                return { hasAccess: true, isGuest: true };
+            }else if(path.startsWith(aa)){
+                return { hasAccess: true, isGuest: true };
+            }
+        }
+    }
+
+    return { hasAccess: false, isGuest: true };
+}

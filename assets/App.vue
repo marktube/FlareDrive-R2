@@ -7,7 +7,16 @@
   >
     <progress v-if="uploadProgress !== null" :value="uploadProgress" max="100"></progress>
     <UploadPopup v-model="showUploadPopup" @upload="onUploadClicked" @createFolder="createFolder"></UploadPopup>
-    <button class="upload-button circle" @click="showUploadPopup = true">
+
+    <!-- 登录按钮 -->
+    <button v-if="!isLoggedIn" class="login-button circle" @click="triggerLogin">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="#e6e6e6">
+        <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+      </svg>
+    </button>
+
+    <!-- 上传按钮 - 只有登录用户或有上传权限的游客才显示 -->
+    <button v-if="canUpload" class="upload-button circle" @click="showUploadPopup = true">
       <svg t="1741764069699" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg"
         p-id="24280" width="24" height="24">
         <path
@@ -46,7 +55,20 @@
       </div>
     </div>
     <div class="file-list-container">
-      <ul class="file-list">
+      <!-- 需要登录提示 -->
+      <div v-if="needLogin" class="login-prompt">
+        <div class="login-prompt-content">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="#666">
+            <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+          </svg>
+          <h3>需要登录</h3>
+          <p>请点击右下角的登录按钮进行身份验证后查看文件</p>
+          <button class="login-prompt-button" @click="triggerLogin">立即登录</button>
+        </div>
+      </div>
+
+      <!-- 文件列表 -->
+      <ul v-else class="file-list">
         <li v-if="cwd !== ''">
           <div tabindex="0" class="file-item" @click="cwd = cwd.replace(/[^\/]+\/$/, '')" @contextmenu.prevent>
             <div class="file-icon">
@@ -114,12 +136,13 @@
           </div>
         </li>
       </ul>
-    </div>
-    <div v-if="loading" style="margin: 20px 0; text-align: center">
-      <span style="font-size: 20px;">加载中...</span>
-    </div>
-    <div v-else-if="!filteredFiles.length && !filteredFolders.length" style="margin: 20px 0; text-align: center">
-      <span style="font-size: 20px;">没有文件</span>
+
+      <div v-if="loading && !needLogin" style="margin: 20px 0; text-align: center">
+        <span style="font-size: 20px;">加载中...</span>
+      </div>
+      <div v-else-if="!needLogin && !filteredFiles.length && !filteredFolders.length" style="margin: 20px 0; text-align: center">
+        <span style="font-size: 20px;">没有文件</span>
+      </div>
     </div>
     <Dialog v-model="showContextMenu">
       <div
@@ -210,7 +233,10 @@ export default {
     showUploadPopup: false,
     uploadProgress: null,
     uploadQueue: [],
-    backgroundImageUrl: "/assets/bg-light.webp"
+    backgroundImageUrl: "/assets/bg-light.webp",
+    needLogin: false,
+    isGuest: false,
+    isLoggedIn: false
   }),
 
   computed: {
@@ -230,6 +256,16 @@ export default {
         folders = folders.filter((folder) => folder.includes(this.search));
       }
       return folders;
+    },
+
+    // 检查是否可以上传（登录用户或有上传权限的游客）
+    canUpload() {
+      // 游客不允许上传
+      if (this.isGuest) {
+        return false;
+      }
+      // 已登录用户可以上传
+      return this.isLoggedIn;
     },
   },
 
@@ -268,10 +304,29 @@ export default {
       this.files = [];
       this.folders = [];
       this.loading = true;
+      this.needLogin = false;
+
       fetch(`/api/children/${this.cwd}`)
-        .then((res) => res.json())
+        .then((res) => {
+          if (res.status === 401) {
+            // 需要登录
+            return res.json().then(data => {
+              this.needLogin = true;
+              this.isLoggedIn = false;
+              this.isGuest = true;
+              this.loading = false;
+              throw new Error('需要登录');
+            });
+          }
+          return res.json();
+        })
         .then((files) => {
-          this.files = files.value;
+          this.needLogin = false;
+          this.files = files.value || [];
+          this.folders = files.folders || [];
+          this.isGuest = files.isGuest || false;
+          this.isLoggedIn = !this.isGuest;
+
           if (this.order) {
             this.files.sort((a, b) => {
               if (this.order === "size") {
@@ -279,7 +334,12 @@ export default {
               }
             });
           }
-          this.folders = files.folders;
+          this.loading = false;
+        })
+        .catch((error) => {
+          if (error.message !== '需要登录') {
+            console.error('获取文件列表失败:', error);
+          }
           this.loading = false;
         });
     },
@@ -295,6 +355,14 @@ export default {
     },
 
     onDrop(ev) {
+      // 检查是否有上传权限
+      if (!this.canUpload) {
+        if (this.needLogin) {
+          this.triggerLogin();
+        }
+        return;
+      }
+
       let files;
       if (ev.dataTransfer.items) {
         files = [...ev.dataTransfer.items]
@@ -302,6 +370,24 @@ export default {
           .map((item) => item.getAsFile());
       } else files = ev.dataTransfer.files;
       this.uploadFiles(files);
+    },
+
+    // 触发登录
+    triggerLogin() {
+      // 通过尝试访问一个需要权限的API来触发浏览器的Basic Auth对话框
+      fetch('/api/write/test/', {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      }).then(response => {
+        if (response.ok) {
+          // 登录成功，刷新文件列表
+          this.fetchFiles();
+        }
+      }).catch(error => {
+        console.log('登录取消或失败');
+      });
     },
 
     onMenuClick(text) {
