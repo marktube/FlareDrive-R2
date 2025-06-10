@@ -418,6 +418,8 @@ export default {
         this.isSearchExpanded = false;
         // 恢复页面滚动
         document.body.style.overflow = '';
+        document.body.style.overflowX = '';
+        document.documentElement.style.overflowX = '';
         return;
       }
 
@@ -433,6 +435,8 @@ export default {
       // 防止页面滚动（仅在移动端）
       if (window.innerWidth <= 768) {
         document.body.style.overflow = 'hidden';
+        document.body.style.overflowX = 'hidden'; // 强制防止水平滚动
+        document.documentElement.style.overflowX = 'hidden'; // 也设置html元素
       }
     },
 
@@ -444,6 +448,8 @@ export default {
           this.isSearchExpanded = false;
           // 恢复页面滚动
           document.body.style.overflow = '';
+          document.body.style.overflowX = '';
+          document.documentElement.style.overflowX = '';
         }
       }, 200);
     },
