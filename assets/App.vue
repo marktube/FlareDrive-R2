@@ -486,8 +486,8 @@ export default {
         // 创建Basic Auth头
         const credentials = btoa(`${this.loginForm.username}:${this.loginForm.password}`);
 
-        // 尝试访问需要权限的API - 使用test端点验证登录
-        const response = await fetch('/api/write/test/', {
+        // 使用children端点验证登录 - 这个端点已经有完善的认证逻辑
+        const response = await fetch(`/api/children/${this.cwd}`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${credentials}`,
@@ -496,10 +496,24 @@ export default {
         });
 
         if (response.ok) {
-          // 登录成功，设置认证头到全局
-          this.setAuthHeader(credentials);
-          this.closeModal();
-          this.fetchFiles(); // 刷新文件列表
+          const data = await response.json();
+
+          // 检查是否成功获取到数据且不需要登录
+          if (!data.needLogin) {
+            // 登录成功，设置认证头到全局
+            this.setAuthHeader(credentials);
+            this.closeModal();
+
+            // 更新状态
+            this.needLogin = false;
+            this.files = data.value || [];
+            this.folders = data.folders || [];
+            this.isGuest = data.isGuest || false;
+            this.isLoggedIn = !this.isGuest;
+            this.loading = false;
+          } else {
+            this.loginError = '用户名或密码错误';
+          }
         } else {
           this.loginError = '用户名或密码错误';
         }
