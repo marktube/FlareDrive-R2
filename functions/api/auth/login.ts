@@ -38,19 +38,24 @@ export async function onRequestPost(context) {
             });
         }
         
-        // 解析用户账户信息，支持只读权限
-        const accountParts = account.split(':');
+        // 检查用户账户：先检查普通用户，再检查只读用户
         let isReadOnly = false;
-        let actualAccount = account;
+        let permissions = null;
+        let username = account.split(':')[0];
 
-        if (accountParts.length === 3 && accountParts[2] === 'r') {
+        // 先检查普通用户
+        if(context.env[account]) {
+            permissions = context.env[account].split(",");
+            isReadOnly = false;
+        }
+        // 再检查只读用户
+        else if(context.env[account + ':r']) {
+            permissions = context.env[account + ':r'].split(",");
             isReadOnly = true;
-            actualAccount = `${accountParts[0]}:${accountParts[1]}`;
         }
 
-        // 检查环境变量中是否存在该账户
-        const envKey = isReadOnly ? `${actualAccount}:r` : actualAccount;
-        if(!context.env[envKey]) {
+        // 如果都不存在，返回错误
+        if(!permissions) {
             return new Response(JSON.stringify({
                 success: false,
                 message: "用户名或密码错误"
@@ -59,14 +64,11 @@ export async function onRequestPost(context) {
                 headers: { "Content-Type": "application/json" }
             });
         }
-
-        // 认证成功，返回用户信息
-        const permissions = context.env[envKey].split(",");
         return new Response(JSON.stringify({
             success: true,
             message: "登录成功",
             user: {
-                username: actualAccount.split(':')[0],
+                username: username,
                 permissions: permissions,
                 isAdmin: permissions.includes("*"),
                 isReadOnly: isReadOnly

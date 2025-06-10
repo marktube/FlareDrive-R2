@@ -1,24 +1,24 @@
 // 解析用户账户信息，支持只读权限
 function parseUserAccount(account, context) {
-    // 检查是否是只读用户格式：username:password:r
-    const accountParts = account.split(':');
     let isReadOnly = false;
-    let actualAccount = account;
+    let permissions = null;
 
-    if (accountParts.length === 3 && accountParts[2] === 'r') {
-        isReadOnly = true;
-        actualAccount = `${accountParts[0]}:${accountParts[1]}`;
+    // 先检查普通用户
+    if(context.env[account]) {
+        permissions = context.env[account].split(",");
+        isReadOnly = false;
     }
-
-    // 检查环境变量中是否存在该账户
-    const envKey = isReadOnly ? `${actualAccount}:r` : actualAccount;
-    const permissions = context.env[envKey];
+    // 再检查只读用户
+    else if(context.env[account + ':r']) {
+        permissions = context.env[account + ':r'].split(",");
+        isReadOnly = true;
+    }
 
     return {
         exists: !!permissions,
-        permissions: permissions ? permissions.split(",") : [],
+        permissions: permissions || [],
         isReadOnly: isReadOnly,
-        actualAccount: actualAccount
+        actualAccount: account
     };
 }
 
