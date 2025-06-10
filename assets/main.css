@@ -551,3 +551,19 @@ input[type="search"].search-input {
   display: block;
   margin-top: 2px;
 }
+
+/* 只读用户提示样式 */
+.readonly-notice {
+  text-align: center;
+  padding: 20px;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  margin: 20px;
+  color: #856404;
+}
+
+.readonly-notice p {
+  margin: 0;
+  font-size: 16px;
+}

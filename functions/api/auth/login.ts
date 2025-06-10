@@ -38,8 +38,19 @@ export async function onRequestPost(context) {
             });
         }
         
+        // 解析用户账户信息，支持只读权限
+        const accountParts = account.split(':');
+        let isReadOnly = false;
+        let actualAccount = account;
+
+        if (accountParts.length === 3 && accountParts[2] === 'r') {
+            isReadOnly = true;
+            actualAccount = `${accountParts[0]}:${accountParts[1]}`;
+        }
+
         // 检查环境变量中是否存在该账户
-        if(!context.env[account]) {
+        const envKey = isReadOnly ? `${actualAccount}:r` : actualAccount;
+        if(!context.env[envKey]) {
             return new Response(JSON.stringify({
                 success: false,
                 message: "用户名或密码错误"
@@ -48,16 +59,17 @@ export async function onRequestPost(context) {
                 headers: { "Content-Type": "application/json" }
             });
         }
-        
+
         // 认证成功，返回用户信息
-        const permissions = context.env[account].split(",");
+        const permissions = context.env[envKey].split(",");
         return new Response(JSON.stringify({
             success: true,
             message: "登录成功",
             user: {
-                username: account.split(':')[0],
+                username: actualAccount.split(':')[0],
                 permissions: permissions,
-                isAdmin: permissions.includes("*")
+                isAdmin: permissions.includes("*"),
+                isReadOnly: isReadOnly
             }
         }), {
             status: 200,

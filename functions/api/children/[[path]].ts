@@ -52,18 +52,25 @@ export async function onRequestGet(context) {
 
           // 如果不是管理员，需要过滤内容
           if (!allow.includes("*")) {
-            // 过滤文件：只显示用户有权限的文件
+            // 获取游客权限，已登录用户也应该能访问游客目录
+            const guestEnv = context.env["GUEST"] || context.env["guest"];
+            const allow_guest = guestEnv ? guestEnv.split(",") : [];
+
+            // 合并用户权限和游客权限
+            const combinedPermissions = [...allow, ...allow_guest];
+
+            // 过滤文件：显示用户有权限的文件 + 游客可访问的文件
             objKeys = objKeys.filter(file => {
-              for (var a of allow) {
+              for (var a of combinedPermissions) {
                 if (a == "*") return true;
                 if (file.key.startsWith(a)) return true;
               }
               return false;
             });
 
-            // 过滤文件夹：只显示用户有权限的文件夹
+            // 过滤文件夹：显示用户有权限的文件夹 + 游客可访问的文件夹
             folders = folders.filter(folder => {
-              for (var a of allow) {
+              for (var a of combinedPermissions) {
                 if (a == "*") return true;
                 if (folder.startsWith(a)) return true;
               }

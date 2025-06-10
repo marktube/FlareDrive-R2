@@ -25,8 +25,8 @@
                 <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
               </svg>
               <div>
-                <p class="user-status">{{ isGuest ? '游客模式' : (currentUser ? currentUser.username + ' 已登录' : '已登录') }}</p>
-                <p class="user-desc">{{ isGuest ? '只能查看文件' : '可以上传和管理文件' }}</p>
+                <p class="user-status">{{ getUserStatusText() }}</p>
+                <p class="user-desc">{{ getUserDescText() }}</p>
               </div>
             </div>
             <div class="user-actions">
@@ -98,7 +98,7 @@
             <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="#4CAF50">
               <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
             </svg>
-            <span class="user-status-text">{{ isLoggedIn ? (currentUser ? currentUser.username : '已登录') : '登录' }}</span>
+            <span class="user-status-text">{{ getTopUserStatusText() }}</span>
           </button>
         </div>
 
@@ -365,8 +365,17 @@ export default {
       if (this.isGuest) {
         return false;
       }
+      // 只读用户不允许上传
+      if (this.isReadOnlyUser) {
+        return false;
+      }
       // 已登录用户可以上传
       return this.isLoggedIn;
+    },
+
+    // 检查是否是只读用户
+    isReadOnlyUser() {
+      return this.currentUser && this.currentUser.isReadOnly;
     },
   },
 
@@ -575,6 +584,43 @@ export default {
         console.error('恢复用户信息失败:', error);
         // 出错时清除认证信息
         this.clearAuthHeader();
+      }
+    },
+
+    // 获取用户状态文本
+    getUserStatusText() {
+      if (this.isGuest) {
+        return '游客模式';
+      } else if (this.currentUser) {
+        const username = this.currentUser.username;
+        const readOnlyText = this.currentUser.isReadOnly ? ' (只读)' : '';
+        return `${username} 已登录${readOnlyText}`;
+      } else {
+        return '已登录';
+      }
+    },
+
+    // 获取顶部用户状态文本（简化版）
+    getTopUserStatusText() {
+      if (!this.isLoggedIn) {
+        return '登录';
+      } else if (this.currentUser) {
+        const username = this.currentUser.username;
+        const readOnlyText = this.currentUser.isReadOnly ? ' (只读)' : '';
+        return `${username}${readOnlyText}`;
+      } else {
+        return '已登录';
+      }
+    },
+
+    // 获取用户描述文本
+    getUserDescText() {
+      if (this.isGuest) {
+        return '只能查看文件';
+      } else if (this.isReadOnlyUser) {
+        return '只能查看文件，无法上传或修改';
+      } else {
+        return '可以上传和管理文件';
       }
     },
 

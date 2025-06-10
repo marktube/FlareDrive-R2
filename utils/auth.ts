@@ -1,3 +1,27 @@
+// 解析用户账户信息，支持只读权限
+function parseUserAccount(account, context) {
+    // 检查是否是只读用户格式：username:password:r
+    const accountParts = account.split(':');
+    let isReadOnly = false;
+    let actualAccount = account;
+
+    if (accountParts.length === 3 && accountParts[2] === 'r') {
+        isReadOnly = true;
+        actualAccount = `${accountParts[0]}:${accountParts[1]}`;
+    }
+
+    // 检查环境变量中是否存在该账户
+    const envKey = isReadOnly ? `${actualAccount}:r` : actualAccount;
+    const permissions = context.env[envKey];
+
+    return {
+        exists: !!permissions,
+        permissions: permissions ? permissions.split(",") : [],
+        isReadOnly: isReadOnly,
+        actualAccount: actualAccount
+    };
+}
+
 export function get_auth_status(context) {
     var dopath = context.request.url.split("/api/write/items/")[1]
     const guestEnv = context.env["GUEST"] || context.env["guest"];
@@ -17,9 +41,16 @@ export function get_auth_status(context) {
     const Authorization=headers.get('Authorization').split("Basic ")[1]
     const account = atob(Authorization);
     if(!account)return false
-    if(!context.env[account])return false
+
+    // 解析用户账户信息
+    const userInfo = parseUserAccount(account, context);
+    if(!userInfo.exists)return false;
+
+    // 只读用户不能进行写操作
+    if(userInfo.isReadOnly) return false;
+
     if(dopath.startsWith("_$flaredrive$/thumbnails/"))return true;
-    const allow = context.env[account].split(",")
+    const allow = userInfo.permissions;
     for (var a of allow){
         if(a == "*"){
             return true
@@ -27,6 +58,19 @@ export function get_auth_status(context) {
             return true
         }
     }
+
+    // 检查是否是游客目录 - 已登录用户也应该能访问游客目录
+    if(guestEnv){
+        const allow_guest = guestEnv.split(",")
+        for (var aa of allow_guest){
+            if(aa == "*"){
+                return true
+            }else if(dopath.startsWith(aa)){
+                return true
+            }
+        }
+    }
+
     return false;
   }
 
@@ -44,10 +88,13 @@ export function get_list_auth_status(context, path = "") {
         console.log('get_list_auth_status - decoded account:', account);
         console.log('get_list_auth_status - env[account] exists:', !!context.env[account]);
 
-        if(account && context.env[account]) {
+        // 解析用户账户信息
+        const userInfo = parseUserAccount(account, context);
+        if(userInfo.exists) {
             // 已登录用户，检查目录权限
-            const allow = context.env[account].split(",")
+            const allow = userInfo.permissions;
             console.log('get_list_auth_status - user permissions:', allow);
+            console.log('get_list_auth_status - user isReadOnly:', userInfo.isReadOnly);
             console.log('get_list_auth_status - checking path:', path);
 
             // 特殊情况：根目录始终允许访问，以便显示用户有权限的子目录
@@ -74,6 +121,27 @@ export function get_list_auth_status(context, path = "") {
                     }
                 }
             }
+
+            // 检查是否是游客目录 - 已登录用户也应该能访问游客目录
+            const guestEnv = context.env["GUEST"] || context.env["guest"];
+            if(guestEnv && path !== "") {
+                const allow_guest = guestEnv.split(",");
+                for (var aa of allow_guest){
+                    if(aa == "*"){
+                        console.log('get_list_auth_status - logged user accessing guest admin directory');
+                        return { hasAccess: true, isGuest: false };
+                    }else {
+                        const normalizedPath = path.endsWith('/') ? path : path + '/';
+                        const normalizedGuestPermission = aa.endsWith('/') ? aa : aa + '/';
+
+                        if(normalizedPath.startsWith(normalizedGuestPermission) || normalizedGuestPermission.startsWith(normalizedPath)){
+                            console.log('get_list_auth_status - logged user accessing guest directory');
+                            return { hasAccess: true, isGuest: false };
+                        }
+                    }
+                }
+            }
+
             console.log('get_list_auth_status - no matching permissions for non-root path');
             return { hasAccess: false, isGuest: false };
         } else {
