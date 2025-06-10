@@ -1,14 +1,6 @@
 <template>
   <div v-if="show" class="media-preview-overlay" @click="closePreview">
     <div class="media-preview-container" @click.stop>
-      <!-- 调试状态信息 -->
-      <div style="position: absolute; top: 10px; right: 10px; background: rgba(255,0,0,0.8); color: white; padding: 5px; font-size: 10px; z-index: 10000;">
-        <div>loading: {{ loading }}</div>
-        <div>error: {{ error }}</div>
-        <div>isImage: {{ isImage }}</div>
-        <div>isVideo: {{ isVideo }}</div>
-      </div>
-
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-indicator">
         <div class="spinner"></div>
@@ -18,13 +10,6 @@
 
       <!-- 图片预览 -->
       <div v-else-if="isImage" class="image-viewer">
-        <!-- 调试信息 -->
-        <div style="position: absolute; top: 50px; left: 20px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 1000;">
-          <div>isImage: {{ isImage }}</div>
-          <div>currentMedia.url: {{ currentMedia.url }}</div>
-          <div>currentMedia.name: {{ currentMedia.name }}</div>
-        </div>
-
         <img
           :src="currentMedia.url"
           :alt="currentMedia.name"
@@ -238,37 +223,17 @@ export default {
   computed: {
     currentMedia() {
       const media = this.mediaList[this.currentIndex] || {};
-      console.log('currentMedia computed:', {
-        currentIndex: this.currentIndex,
-        mediaListLength: this.mediaList.length,
-        media: media,
-        mediaUrl: media.url,
-        mediaName: media.name,
-        mediaKey: media.key
-      });
       return media;
     },
     isImage() {
       const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
       const ext = this.currentMedia.name?.split('.').pop()?.toLowerCase();
-      const result = imageTypes.includes(ext);
-      console.log('isImage computed:', {
-        name: this.currentMedia.name,
-        ext: ext,
-        result: result
-      });
-      return result;
+      return imageTypes.includes(ext);
     },
     isVideo() {
       const videoTypes = ['mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
       const ext = this.currentMedia.name?.split('.').pop()?.toLowerCase();
-      const result = videoTypes.includes(ext);
-      console.log('isVideo computed:', {
-        name: this.currentMedia.name,
-        ext: ext,
-        result: result
-      });
-      return result;
+      return videoTypes.includes(ext);
     },
     imageStyle() {
       return {
@@ -279,13 +244,7 @@ export default {
   },
   watch: {
     show(newVal) {
-      console.log('MediaPreview show changed:', newVal);
       if (newVal) {
-        console.log('MediaPreview opening with:', {
-          mediaList: this.mediaList,
-          initialIndex: this.initialIndex,
-          currentMedia: this.currentMedia
-        });
         this.currentIndex = this.initialIndex;
         this.loading = true; // 显示时开始加载
         this.error = false;
@@ -304,7 +263,6 @@ export default {
       }
     },
     currentIndex(newVal) {
-      console.log('MediaPreview currentIndex changed:', newVal, 'currentMedia:', this.currentMedia);
       this.loading = true;
       this.error = false;
       this.resetImage();
@@ -315,7 +273,6 @@ export default {
       });
     },
     initialIndex(newVal) {
-      console.log('MediaPreview initialIndex changed:', newVal);
       if (this.show) {
         this.currentIndex = newVal;
       }
@@ -328,17 +285,14 @@ export default {
     
     // 媒体加载处理
     onImageLoad() {
-      console.log('图片加载成功:', this.currentMedia.url);
       this.loading = false;
       this.error = false;
     },
     onVideoLoad() {
-      console.log('视频加载成功:', this.currentMedia.url);
       this.loading = false;
       this.error = false;
     },
     onImageError() {
-      console.log('图片加载失败:', this.currentMedia.url);
       this.loading = false;
       this.error = true;
       this.errorMessage = '图片加载失败';
@@ -370,7 +324,7 @@ export default {
       this.scale = Math.max(this.scale / 1.2, 0.1);
     },
     rotateImage() {
-      this.rotation = (this.rotation + 90) % 360;
+      this.rotation += 90;
     },
     resetImage() {
       this.scale = 1;
@@ -453,19 +407,55 @@ export default {
       alert('朋友圈分享功能需要在微信环境中使用');
     },
     
-    generateQRCode() {
-      // 这里需要引入QR码生成库，暂时用占位符
+    async generateQRCode() {
       const canvas = this.$refs.qrCanvas;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#f0f0f0';
-        ctx.fillRect(0, 0, 200, 200);
-        ctx.fillStyle = '#333';
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('QR Code', 100, 100);
-        ctx.fillText('(需要QR库)', 100, 120);
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      const url = new URL(this.currentMedia.url, window.location.origin).toString();
+
+      // 检查是否配置了外部二维码API
+      const qrcodeApi = window.ENV?.QRCODE_API || '';
+
+      if (qrcodeApi) {
+        try {
+          // 使用外部API生成二维码
+          const qrUrl = `${qrcodeApi}?data=${encodeURIComponent(url)}&size=200x200`;
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+
+          img.onload = () => {
+            ctx.clearRect(0, 0, 200, 200);
+            ctx.drawImage(img, 0, 0, 200, 200);
+          };
+
+          img.onerror = () => {
+            this.drawQRPlaceholder(ctx, '二维码生成失败');
+          };
+
+          img.src = qrUrl;
+        } catch (error) {
+          console.error('二维码生成错误:', error);
+          this.drawQRPlaceholder(ctx, '二维码生成失败');
+        }
+      } else {
+        // 没有配置API，显示提示信息
+        this.drawQRPlaceholder(ctx, '需要配置QRCODE_API');
       }
+    },
+
+    drawQRPlaceholder(ctx, message) {
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, 200, 200);
+      ctx.fillStyle = '#333';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('QR Code', 100, 90);
+      ctx.fillText(message, 100, 110);
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#666';
+      ctx.fillText('请配置环境变量', 100, 130);
+      ctx.fillText('QRCODE_API', 100, 145);
     },
     
     detectMobile() {
@@ -474,24 +464,19 @@ export default {
 
     // 检查图片加载状态
     checkImageLoad() {
-      console.log('checkImageLoad called');
       if (!this.currentMedia.url) {
-        console.log('No URL found');
         return;
       }
 
       // 创建一个新的图片对象来测试加载
       const img = new Image();
       img.onload = () => {
-        console.log('Image loaded successfully via Image object');
         this.onImageLoad();
       };
       img.onerror = () => {
-        console.log('Image failed to load via Image object');
         this.onImageError();
       };
       img.src = this.currentMedia.url;
-      console.log('Testing image load for:', img.src);
     },
 
     // 鼠标拖拽处理

@@ -17,6 +17,23 @@
   <body>
     <div id="app"></div>
     <script>
+      // 环境变量配置
+      window.ENV = {
+        // 二维码API配置，例如: 'https://qrcodeapi.com/api'
+        QRCODE_API: ''
+      };
+
+      // 从服务器获取配置
+      fetch('/api/config')
+        .then(response => response.json())
+        .then(config => {
+          window.ENV = { ...window.ENV, ...config };
+        })
+        .catch(error => {
+          console.warn('无法获取服务器配置，使用默认配置:', error);
+        });
+    </script>
+    <script>
       const { loadModule } = window["vue3-sfc-loader"];
 
       const options = {
