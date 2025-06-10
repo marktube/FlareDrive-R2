@@ -8,22 +8,44 @@
     <progress v-if="uploadProgress !== null" :value="uploadProgress" max="100"></progress>
     <UploadPopup v-model="showUploadPopup" @upload="onUploadClicked" @createFolder="createFolder"></UploadPopup>
 
-    <!-- 登录按钮 -->
-    <button v-if="!isLoggedIn" class="login-button circle" @click="showLoginModal">
-      <svg viewBox="0 0 24 24" width="24" height="24" fill="#e6e6e6">
+    <!-- 登录/用户按钮 - 始终显示 -->
+    <button class="login-button circle" @click="showLoginModal" :title="isLoggedIn ? '切换用户' : '登录'">
+      <svg v-if="!isLoggedIn" viewBox="0 0 24 24" width="24" height="24" fill="#e6e6e6">
+        <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+      </svg>
+      <!-- 已登录状态的图标 -->
+      <svg v-else viewBox="0 0 24 24" width="24" height="24" fill="#4CAF50">
         <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
       </svg>
     </button>
 
-    <!-- 登录模态框 -->
+    <!-- 登录/用户模态框 -->
     <div v-if="showModal" class="modal-overlay" @click="closeModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3>登录</h3>
+          <h3>{{ isLoggedIn ? '用户管理' : '登录' }}</h3>
           <button class="close-button" @click="closeModal">&times;</button>
         </div>
         <div class="modal-body">
-          <form @submit.prevent="handleLogin">
+          <!-- 已登录状态 -->
+          <div v-if="isLoggedIn" class="user-info">
+            <div class="current-user">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="#4CAF50">
+                <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+              </svg>
+              <div>
+                <p class="user-status">{{ isGuest ? '游客模式' : '已登录' }}</p>
+                <p class="user-desc">{{ isGuest ? '只能查看文件' : '可以上传和管理文件' }}</p>
+              </div>
+            </div>
+            <div class="user-actions">
+              <button @click="switchUser" class="switch-user-button">切换用户</button>
+              <button @click="logout" class="logout-button">退出登录</button>
+            </div>
+          </div>
+
+          <!-- 未登录状态 -->
+          <form v-else @submit.prevent="handleLogin">
             <div class="form-group">
               <label for="username">用户名:</label>
               <input
@@ -275,7 +297,7 @@ export default {
     uploadQueue: [],
     backgroundImageUrl: "/assets/bg-light.webp",
     needLogin: false,
-    isGuest: false,
+    isGuest: true, // 默认为游客状态
     isLoggedIn: false,
     // 模态框相关
     showModal: false,
@@ -461,6 +483,26 @@ export default {
       } finally {
         this.loginLoading = false;
       }
+    },
+
+    // 切换用户
+    switchUser() {
+      this.isLoggedIn = false;
+      this.isGuest = true;
+      this.needLogin = false;
+      this.loginForm.username = '';
+      this.loginForm.password = '';
+      this.loginError = '';
+      // 不关闭模态框，直接切换到登录表单
+    },
+
+    // 退出登录
+    logout() {
+      this.isLoggedIn = false;
+      this.isGuest = true;
+      this.needLogin = false;
+      this.closeModal();
+      this.fetchFiles(); // 刷新文件列表，显示游客视图
     },
 
     // 触发登录（保留原方法用于拖拽上传时的登录）
