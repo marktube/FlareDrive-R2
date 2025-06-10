@@ -517,17 +517,8 @@ export default {
           this.isGuest = false;
           this.closeModal();
 
-          // 如果用户不是管理员且当前在根目录，跳转到用户有权限的第一个目录
-          if (!data.user.isAdmin && this.cwd === '' && data.user.permissions.length > 0) {
-            const firstPermission = data.user.permissions[0];
-            if (firstPermission !== '*') {
-              // 跳转到用户有权限的目录
-              this.cwd = firstPermission;
-              return; // cwd的watch会自动调用fetchFiles
-            }
-          }
-
-          // 延迟一下确保localStorage已设置，然后刷新文件列表
+          // 登录成功后刷新当前目录，显示用户有权限的内容
+          // 不自动跳转，让用户在根目录看到他们可以访问的目录
           setTimeout(() => {
             this.fetchFiles();
           }, 100);
