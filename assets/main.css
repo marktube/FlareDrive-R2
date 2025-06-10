@@ -577,7 +577,7 @@ button {
     padding: 8px 10px;
     gap: 8px;
     min-height: 56px;
-    overflow: hidden; /* 防止溢出 */
+    overflow: visible; /* 允许菜单显示在外部 */
   }
 
   .app-title-container {
@@ -636,7 +636,7 @@ input[type="search"].search-input {
     right: 10px;
     max-width: calc(100vw - 20px); /* 防止超出视口 */
     width: calc(100vw - 20px);
-    z-index: 9999; /* 提高z-index确保在最上层 */
+    z-index: 10000; /* 确保搜索框在菜单之上 */
     background: white;
     border-radius: 20px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);

@@ -44,14 +44,14 @@ const emit = defineEmits(["update:modelValue", "click"]);
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.2);
-  z-index: 8888; /* 提高z-index但低于搜索框 */
+  z-index: 9998; /* 提高z-index，仅低于搜索框 */
 }
 
 .menu-content {
   top: 16px;
   position: absolute;
   background-color: white;
-  z-index: 8889; /* 确保菜单内容在遮罩层之上 */
+  z-index: 9999; /* 确保菜单内容在最上层 */
   border-radius: 6px;
   right: 0;
   min-width: 168px;
