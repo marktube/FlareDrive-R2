@@ -10,6 +10,13 @@
 
       <!-- 图片预览 -->
       <div v-else-if="isImage" class="image-viewer">
+        <!-- 调试信息 -->
+        <div style="position: absolute; top: 50px; left: 20px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-size: 12px; z-index: 1000;">
+          <div>isImage: {{ isImage }}</div>
+          <div>currentMedia.url: {{ currentMedia.url }}</div>
+          <div>currentMedia.name: {{ currentMedia.name }}</div>
+        </div>
+
         <img
           :src="currentMedia.url"
           :alt="currentMedia.name"
@@ -226,7 +233,10 @@ export default {
       console.log('currentMedia computed:', {
         currentIndex: this.currentIndex,
         mediaListLength: this.mediaList.length,
-        media: media
+        media: media,
+        mediaUrl: media.url,
+        mediaName: media.name,
+        mediaKey: media.key
       });
       return media;
     },
