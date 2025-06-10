@@ -59,11 +59,10 @@
       <div v-if="needLogin" class="login-prompt">
         <div class="login-prompt-content">
           <svg viewBox="0 0 24 24" width="48" height="48" fill="#666">
-            <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+            <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
           </svg>
-          <h3>需要登录</h3>
-          <p>请点击右下角的登录按钮进行身份验证后查看文件</p>
-          <button class="login-prompt-button" @click="triggerLogin">立即登录</button>
+          <h3>当前没有文件或者需要您登录才能查看</h3>
+          <p>如需查看和管理文件，请点击右下角的登录按钮进行身份验证</p>
         </div>
       </div>
 
@@ -309,18 +308,23 @@ export default {
       fetch(`/api/children/${this.cwd}`)
         .then((res) => {
           if (res.status === 401) {
-            // 需要登录
+            // 需要登录 - 静默处理，不弹出登录框
             return res.json().then(data => {
               this.needLogin = true;
               this.isLoggedIn = false;
               this.isGuest = true;
               this.loading = false;
-              throw new Error('需要登录');
+              return null; // 返回 null 而不是抛出错误
             });
           }
           return res.json();
         })
         .then((files) => {
+          if (files === null) {
+            // 处理需要登录的情况，不做任何操作
+            return;
+          }
+
           this.needLogin = false;
           this.files = files.value || [];
           this.folders = files.folders || [];
@@ -337,9 +341,7 @@ export default {
           this.loading = false;
         })
         .catch((error) => {
-          if (error.message !== '需要登录') {
-            console.error('获取文件列表失败:', error);
-          }
+          console.error('获取文件列表失败:', error);
           this.loading = false;
         });
     },
