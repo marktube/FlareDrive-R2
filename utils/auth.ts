@@ -1,8 +1,9 @@
 export function get_auth_status(context) {
     var dopath = context.request.url.split("/api/write/items/")[1]
-    if(context.env["GUEST"]){
+    const guestEnv = context.env["GUEST"] || context.env["guest"];
+    if(guestEnv){
         if(dopath.startsWith("_$flaredrive$/thumbnails/"))return true;
-        const allow_guest = context.env["GUEST"].split(",")
+        const allow_guest = guestEnv.split(",")
         for (var aa of allow_guest){
             if(aa == "*"){
                 return true
@@ -85,9 +86,11 @@ export function get_list_auth_status(context, path = "") {
     // 未登录用户，检查游客权限
     console.log('get_list_auth_status - checking guest permissions');
     console.log('get_list_auth_status - GUEST env var:', context.env["GUEST"]);
+    console.log('get_list_auth_status - guest env var:', context.env["guest"]);
 
-    if(context.env["GUEST"]){
-        const allow_guest = context.env["GUEST"].split(",")
+    const guestEnv = context.env["GUEST"] || context.env["guest"];
+    if(guestEnv){
+        const allow_guest = guestEnv.split(",")
         console.log('get_list_auth_status - guest permissions:', allow_guest);
 
         // 特殊情况：根目录始终允许游客访问，以便显示游客有权限的子目录

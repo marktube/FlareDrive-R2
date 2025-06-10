@@ -40,28 +40,62 @@ export async function onRequestGet(context) {
     if (!path)
       folders = folders.filter((folder) => folder !== "_$flaredrive$/");
 
-    // 如果是游客且设置了游客目录，只显示允许的目录内容
-    if (authResult.isGuest && context.env["GUEST"]) {
-      const allow_guest = context.env["GUEST"].split(",");
-      const currentPath = path || "";
+    // 根据用户权限过滤内容
+    if (!authResult.isGuest) {
+      // 已登录用户：根据用户权限过滤
+      const headers = new Headers(context.request.headers);
+      if(headers.get('Authorization')) {
+        const Authorization = headers.get('Authorization').split("Basic ")[1];
+        const account = atob(Authorization);
+        if(account && context.env[account]) {
+          const allow = context.env[account].split(",");
 
-      // 过滤文件：只显示游客有权限的文件
-      objKeys = objKeys.filter(file => {
-        for (var aa of allow_guest) {
-          if (aa == "*") return true;
-          if (file.key.startsWith(aa)) return true;
-        }
-        return false;
-      });
+          // 如果不是管理员，需要过滤内容
+          if (!allow.includes("*")) {
+            // 过滤文件：只显示用户有权限的文件
+            objKeys = objKeys.filter(file => {
+              for (var a of allow) {
+                if (a == "*") return true;
+                if (file.key.startsWith(a)) return true;
+              }
+              return false;
+            });
 
-      // 过滤文件夹：只显示游客有权限的文件夹
-      folders = folders.filter(folder => {
-        for (var aa of allow_guest) {
-          if (aa == "*") return true;
-          if (folder.startsWith(aa)) return true;
+            // 过滤文件夹：只显示用户有权限的文件夹
+            folders = folders.filter(folder => {
+              for (var a of allow) {
+                if (a == "*") return true;
+                if (folder.startsWith(a)) return true;
+              }
+              return false;
+            });
+          }
         }
-        return false;
-      });
+      }
+    } else {
+      // 游客用户：根据游客权限过滤
+      const guestEnv = context.env["GUEST"] || context.env["guest"];
+      if (guestEnv) {
+        const allow_guest = guestEnv.split(",");
+
+        // 过滤文件：只显示游客有权限的文件
+        objKeys = objKeys.filter(file => {
+          for (var aa of allow_guest) {
+            if (aa == "*") return true;
+            if (file.key.startsWith(aa)) return true;
+          }
+          return false;
+        });
+
+        // 过滤文件夹：只显示游客有权限的文件夹
+        folders = folders.filter(folder => {
+          for (var aa of allow_guest) {
+            if (aa == "*") return true;
+            if (folder.startsWith(aa)) return true;
+          }
+          return false;
+        });
+      }
     }
 
     return new Response(JSON.stringify({
