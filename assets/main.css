@@ -494,6 +494,8 @@ button {
   transition: all 0.2s ease;
   font-size: 14px;
   white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .user-status-button:hover {
@@ -504,32 +506,92 @@ button {
 .user-status-text {
   color: #333;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 移动端用户状态按钮优化 */
+@media (max-width: 768px) {
+  .user-status-button {
+    padding: 8px 10px;
+    font-size: 13px;
+    gap: 4px;
+    max-width: 100px;
+  }
+
+  .user-status-text {
+    max-width: 70px;
+  }
+}
+
+/* 移动端菜单按钮优化 */
+@media (max-width: 480px) {
+  .user-status-button {
+    max-width: 80px;
+    padding: 6px 8px;
+  }
+
+  .user-status-text {
+    max-width: 50px;
+    font-size: 12px;
+  }
 }
 
 /* app-bar 基础样式 */
 .app-bar {
   display: flex;
   align-items: center;
-  padding: 10px 20px;
+  padding: 10px 15px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  gap: 15px;
+  gap: 10px;
   position: sticky;
   top: 0;
   z-index: 100;
+  min-height: 60px;
 }
 
 .app-title-container {
   flex-shrink: 0;
+  min-width: 0; /* 允许收缩 */
 }
 
 /* 右侧控件容器 */
 .app-bar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .app-bar {
+    padding: 8px 10px;
+    gap: 8px;
+    min-height: 56px;
+    overflow: hidden; /* 防止溢出 */
+  }
+
+  .app-title-container {
+    flex-shrink: 1; /* 允许标题收缩 */
+    min-width: 0;
+  }
+
+  .app-title-container h1 {
+    font-size: 18px !important;
+    margin: 0 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .app-bar-right {
+    gap: 6px;
+    flex-shrink: 0; /* 右侧控件不收缩 */
+  }
 }
 
 /* 调整搜索框样式 */
@@ -541,6 +603,54 @@ input[type="search"].search-input {
   padding: 8px 12px;
   margin-right: 10px;
   flex: 1;
+  min-width: 120px; /* 确保最小宽度 */
+  box-sizing: border-box;
+}
+
+/* 移动端搜索框优化 */
+@media (max-width: 768px) {
+  input[type="search"].search-input {
+    max-width: none;
+    min-width: 100px;
+    padding: 10px 12px; /* 增加内边距，便于触摸 */
+    font-size: 16px; /* 防止iOS自动缩放 */
+    margin-right: 8px;
+  }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 480px) {
+  input[type="search"].search-input {
+    min-width: 80px;
+    padding: 8px 10px;
+    font-size: 14px;
+    margin-right: 6px;
+  }
+}
+
+/* 极小屏幕优化 */
+@media (max-width: 360px) {
+  .app-bar {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  input[type="search"].search-input {
+    min-width: 60px;
+    padding: 6px 8px;
+    font-size: 14px;
+    margin-right: 4px;
+  }
+
+  .user-status-button {
+    max-width: 60px;
+    padding: 4px 6px;
+  }
+
+  .user-status-text {
+    max-width: 40px;
+    font-size: 11px;
+  }
 }
 
 /* 搜索结果样式 */
