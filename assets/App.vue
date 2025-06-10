@@ -285,6 +285,15 @@
         </li>
       </ul>
     </Dialog>
+
+    <!-- 媒体预览组件 -->
+    <MediaPreview
+      :show="showMediaPreview"
+      :mediaList="previewMediaList"
+      :initialIndex="previewInitialIndex"
+      @close="closeMediaPreview"
+    />
+
     <div style="flex:1"></div>
     <Footer />
   </div>
@@ -302,6 +311,7 @@ import Menu from "./Menu.vue";
 import MimeIcon from "./MimeIcon.vue";
 import UploadPopup from "./UploadPopup.vue";
 import Footer from "./Footer.vue";
+import MediaPreview from "./MediaPreview.vue";
 
 export default {
   data: () => ({
@@ -334,7 +344,11 @@ export default {
       password: ''
     },
     loginLoading: false,
-    loginError: ''
+    loginError: '',
+    // 媒体预览相关
+    showMediaPreview: false,
+    previewMediaList: [],
+    previewInitialIndex: 0
   }),
 
   computed: {
@@ -779,17 +793,72 @@ export default {
 
     // 处理文件点击（区分搜索结果和普通文件）
     handleFileClick(file) {
-      if (this.search && this.searchResults.length > 0) {
-        // 搜索结果：跳转到文件所在目录
+      // 检查是否是媒体文件
+      const mediaTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
+      const ext = file.key?.split('.').pop()?.toLowerCase();
+      const isMediaFile = mediaTypes.includes(ext);
+
+      if (isMediaFile) {
+        // 媒体文件：打开预览
+        this.openMediaPreview(file);
+      } else if (this.search && this.searchResults.length > 0) {
+        // 搜索结果中的非媒体文件：跳转到文件所在目录
         const filePath = file.displayPath || file.key;
         const directory = filePath.substring(0, filePath.lastIndexOf('/') + 1);
         this.search = ''; // 清除搜索
         this.searchResults = [];
         this.cwd = directory;
       } else {
-        // 普通文件：预览
+        // 普通非媒体文件：直接预览/下载
         this.preview(`/raw/${file.key}`);
       }
+    },
+
+    // 打开媒体预览
+    openMediaPreview(clickedFile) {
+      // 确定媒体文件列表和初始索引
+      let mediaList = [];
+      let initialIndex = 0;
+
+      if (this.search && this.searchResults.length > 0) {
+        // 搜索结果中的媒体文件
+        mediaList = this.searchResults.filter(file => {
+          if (file.isFolder) return false;
+          const mediaTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
+          const ext = file.key?.split('.').pop()?.toLowerCase();
+          return mediaTypes.includes(ext);
+        });
+      } else {
+        // 当前目录中的媒体文件
+        mediaList = this.filteredFiles.filter(file => {
+          const mediaTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
+          const ext = file.key?.split('.').pop()?.toLowerCase();
+          return mediaTypes.includes(ext);
+        });
+      }
+
+      // 为每个媒体文件添加预览URL
+      mediaList = mediaList.map(file => ({
+        ...file,
+        url: `/raw/${file.key}`,
+        name: file.key.split('/').pop()
+      }));
+
+      // 找到点击文件的索引
+      initialIndex = mediaList.findIndex(file => file.key === clickedFile.key);
+      if (initialIndex === -1) initialIndex = 0;
+
+      // 设置预览数据
+      this.previewMediaList = mediaList;
+      this.previewInitialIndex = initialIndex;
+      this.showMediaPreview = true;
+    },
+
+    // 关闭媒体预览
+    closeMediaPreview() {
+      this.showMediaPreview = false;
+      this.previewMediaList = [];
+      this.previewInitialIndex = 0;
     },
 
     async pasteFile() {
@@ -1174,6 +1243,7 @@ export default {
     MimeIcon,
     UploadPopup,
     Footer,
+    MediaPreview,
   },
 };
 </script>
