@@ -629,12 +629,14 @@ input[type="search"].search-input {
     top: 10px;
     left: 10px;
     right: 10px;
-    max-width: none;
-    z-index: 1001;
+    max-width: calc(100vw - 20px); /* 防止超出视口 */
+    width: calc(100vw - 20px);
+    z-index: 9999; /* 提高z-index确保在最上层 */
     background: white;
     border-radius: 20px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     padding: 4px;
+    box-sizing: border-box; /* 确保padding不会增加总宽度 */
   }
 
   .search-container.search-expanded .search-input {
@@ -651,6 +653,22 @@ input[type="search"].search-input {
     padding: 10px 12px; /* 增加内边距，便于触摸 */
     font-size: 16px; /* 防止iOS自动缩放 */
     margin-right: 8px;
+  }
+}
+
+/* 极小屏幕优化 */
+@media (max-width: 360px) {
+  .search-container.search-expanded {
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    max-width: calc(100vw - 10px);
+    width: calc(100vw - 10px);
+  }
+
+  .search-container.search-expanded .search-input {
+    padding: 10px 12px;
+    font-size: 15px;
   }
 }
 

@@ -416,6 +416,8 @@ export default {
         this.searchResults = [];
         this.isSearching = false;
         this.isSearchExpanded = false;
+        // 恢复页面滚动
+        document.body.style.overflow = '';
         return;
       }
 
@@ -428,6 +430,10 @@ export default {
     // 搜索框获得焦点
     onSearchFocus() {
       this.isSearchExpanded = true;
+      // 防止页面滚动（仅在移动端）
+      if (window.innerWidth <= 768) {
+        document.body.style.overflow = 'hidden';
+      }
     },
 
     // 搜索框失去焦点
@@ -436,6 +442,8 @@ export default {
       setTimeout(() => {
         if (!this.search.trim()) {
           this.isSearchExpanded = false;
+          // 恢复页面滚动
+          document.body.style.overflow = '';
         }
       }, 200);
     },
