@@ -222,7 +222,13 @@ export default {
   },
   computed: {
     currentMedia() {
-      return this.mediaList[this.currentIndex] || {};
+      const media = this.mediaList[this.currentIndex] || {};
+      console.log('currentMedia computed:', {
+        currentIndex: this.currentIndex,
+        mediaListLength: this.mediaList.length,
+        media: media
+      });
+      return media;
     },
     isImage() {
       const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
