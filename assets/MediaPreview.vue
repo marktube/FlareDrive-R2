@@ -293,6 +293,11 @@ export default {
         this.detectMobile();
         document.addEventListener('keydown', this.handleKeydown);
         document.body.style.overflow = 'hidden';
+
+        // 强制触发图片加载检查
+        this.$nextTick(() => {
+          this.checkImageLoad();
+        });
       } else {
         document.removeEventListener('keydown', this.handleKeydown);
         document.body.style.overflow = '';
@@ -303,6 +308,11 @@ export default {
       this.loading = true;
       this.error = false;
       this.resetImage();
+
+      // 强制触发图片加载检查
+      this.$nextTick(() => {
+        this.checkImageLoad();
+      });
     },
     initialIndex(newVal) {
       console.log('MediaPreview initialIndex changed:', newVal);
@@ -461,6 +471,28 @@ export default {
     detectMobile() {
       this.isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     },
+
+    // 检查图片加载状态
+    checkImageLoad() {
+      console.log('checkImageLoad called');
+      if (!this.currentMedia.url) {
+        console.log('No URL found');
+        return;
+      }
+
+      // 创建一个新的图片对象来测试加载
+      const img = new Image();
+      img.onload = () => {
+        console.log('Image loaded successfully via Image object');
+        this.onImageLoad();
+      };
+      img.onerror = () => {
+        console.log('Image failed to load via Image object');
+        this.onImageError();
+      };
+      img.src = this.currentMedia.url;
+      console.log('Testing image load for:', img.src);
+    }
 
     // 鼠标拖拽处理
     onMouseDown(e) {
