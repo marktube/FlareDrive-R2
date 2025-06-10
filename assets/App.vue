@@ -98,7 +98,7 @@
             <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="#4CAF50">
               <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
             </svg>
-            <span class="user-status-text">{{ isLoggedIn ? (isGuest ? '游客' : '已登录') : '登录' }}</span>
+            <span class="user-status-text">{{ isLoggedIn ? (currentUser ? currentUser.username : '已登录') : '登录' }}</span>
           </button>
         </div>
 
@@ -133,8 +133,8 @@
           <svg viewBox="0 0 24 24" width="48" height="48" fill="#666">
             <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
           </svg>
-          <h3>当前没有文件或者需要您登录才能查看</h3>
-          <p>如需查看和管理文件，请点击顶部的登录按钮进行身份验证</p>
+          <h3>当前目录需要登录才能查看</h3>
+          <p>此目录需要特定权限才能访问，请点击顶部的登录按钮进行身份验证</p>
         </div>
       </div>
 
@@ -308,6 +308,7 @@ export default {
     needLogin: false,
     isGuest: true, // 默认为游客状态
     isLoggedIn: false,
+    currentUser: null, // 当前用户信息
     // 模态框相关
     showModal: false,
     loginForm: {
@@ -399,11 +400,21 @@ export default {
       const savedCredentials = localStorage.getItem('authCredentials');
       if (savedCredentials) {
         headers['Authorization'] = `Basic ${savedCredentials}`;
+        console.log('发送认证头:', headers['Authorization']);
+      } else {
+        console.log('没有找到保存的认证信息');
       }
 
+      console.log('fetchFiles 请求URL:', `/api/children/${this.cwd}`);
+      console.log('fetchFiles 请求头:', headers);
+
       fetch(`/api/children/${this.cwd}`, { headers })
-        .then((res) => res.json())
+        .then((res) => {
+          console.log('fetchFiles 响应状态:', res.status);
+          return res.json();
+        })
         .then((data) => {
+          console.log('fetchFiles 响应数据:', data);
           if (data.needLogin) {
             // 需要登录 - 静默处理，不弹出登录框
             this.needLogin = true;
@@ -501,8 +512,25 @@ export default {
         if (data.success) {
           // 登录成功，设置认证头到全局
           this.setAuthHeader(credentials);
+          this.currentUser = data.user; // 保存用户信息
+          this.isLoggedIn = true;
+          this.isGuest = false;
           this.closeModal();
-          this.fetchFiles(); // 刷新文件列表
+
+          // 如果用户不是管理员且当前在根目录，跳转到用户有权限的第一个目录
+          if (!data.user.isAdmin && this.cwd === '' && data.user.permissions.length > 0) {
+            const firstPermission = data.user.permissions[0];
+            if (firstPermission !== '*') {
+              // 跳转到用户有权限的目录
+              this.cwd = firstPermission;
+              return; // cwd的watch会自动调用fetchFiles
+            }
+          }
+
+          // 延迟一下确保localStorage已设置，然后刷新文件列表
+          setTimeout(() => {
+            this.fetchFiles();
+          }, 100);
         } else {
           this.loginError = data.message || '登录失败';
         }
@@ -523,6 +551,8 @@ export default {
       if (window.axios) {
         window.axios.defaults.headers.common['Authorization'] = `Basic ${credentials}`;
       }
+
+      console.log('认证信息已保存到localStorage:', credentials);
     },
 
     // 清除认证头
@@ -547,6 +577,7 @@ export default {
     // 退出登录
     logout() {
       this.clearAuthHeader(); // 清除认证信息
+      this.currentUser = null; // 清除用户信息
       this.isLoggedIn = false;
       this.isGuest = true;
       this.needLogin = false;
@@ -801,7 +832,14 @@ export default {
           url.searchParams.set('marker', marker);
         }
 
-        const response = await fetch(url);
+        // 准备请求头
+        const headers = {};
+        const savedCredentials = localStorage.getItem('authCredentials');
+        if (savedCredentials) {
+          headers['Authorization'] = `Basic ${savedCredentials}`;
+        }
+
+        const response = await fetch(url, { headers });
         const data = await response.json();
 
         // 添加文件
