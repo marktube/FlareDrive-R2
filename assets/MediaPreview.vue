@@ -1,6 +1,14 @@
 <template>
   <div v-if="show" class="media-preview-overlay" @click="closePreview">
     <div class="media-preview-container" @click.stop>
+      <!-- 调试状态信息 -->
+      <div style="position: absolute; top: 10px; right: 10px; background: rgba(255,0,0,0.8); color: white; padding: 5px; font-size: 10px; z-index: 10000;">
+        <div>loading: {{ loading }}</div>
+        <div>error: {{ error }}</div>
+        <div>isImage: {{ isImage }}</div>
+        <div>isVideo: {{ isVideo }}</div>
+      </div>
+
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-indicator">
         <div class="spinner"></div>
