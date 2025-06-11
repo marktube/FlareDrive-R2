@@ -1010,34 +1010,56 @@ export default {
 
     // 自定义文件夹选择对话框
     showFolderSelector(title, folders) {
+      console.log('📂 showFolderSelector 被调用:', { title, folders });
       return new Promise((resolve, reject) => {
+        console.log('📂 创建 Promise，设置对话框状态');
         this.folderDialog = {
           title,
           folders,
           selectedFolder: null,
-          resolve,
-          reject
+          resolve: (value) => {
+            console.log('📂 对话框 resolve 被调用:', value);
+            resolve(value);
+          },
+          reject: (error) => {
+            console.log('📂 对话框 reject 被调用:', error);
+            reject(error);
+          }
         };
         this.showFolderDialog = true;
+        console.log('📂 对话框显示状态设置为 true');
       });
     },
 
     selectFolder(folder) {
+      console.log('📂 selectFolder 被调用:', folder);
       this.folderDialog.selectedFolder = folder.value;
+      console.log('📂 选中的文件夹:', this.folderDialog.selectedFolder);
     },
 
     confirmFolderSelection() {
+      console.log('📂 confirmFolderSelection 被调用');
+      console.log('📂 当前选中的文件夹:', this.folderDialog.selectedFolder);
+      console.log('📂 resolve 函数存在:', !!this.folderDialog.resolve);
+
       if (this.folderDialog.resolve && this.folderDialog.selectedFolder !== null) {
+        console.log('📂 调用 resolve，返回值:', this.folderDialog.selectedFolder);
         this.folderDialog.resolve(this.folderDialog.selectedFolder);
+      } else {
+        console.log('📂 无法调用 resolve - 条件不满足');
       }
       this.showFolderDialog = false;
+      console.log('📂 对话框已关闭');
     },
 
     cancelFolderSelection() {
+      console.log('📂 cancelFolderSelection 被调用');
       if (this.folderDialog.reject) {
+        console.log('📂 调用 reject');
         this.folderDialog.reject(null);
       }
       this.showFolderDialog = false;
+      console.log('📂 对话框已取消并关闭');
     },
 
     // 初始化粘贴按钮位置
