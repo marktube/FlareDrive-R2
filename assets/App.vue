@@ -137,7 +137,7 @@
             { text: '按照名称排序A-Z' },
             { text: '按照大小递增排序' },
             { text: '按照大小递减排序' },
-            { text: '粘贴文件到此目录', disabled: !clipboard || !canUpload }
+            { text: '粘贴文件到此目录', disabled: !clipboard || !canWrite() }
           ]"
           @click="onMenuClick" />
         </div>
@@ -197,7 +197,7 @@
             </svg>
             复制
           </button>
-          <button @click="batchMove" class="toolbar-btn">
+          <button v-if="canWrite()" @click="batchMove" class="toolbar-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14,2 14,8 20,8"/>
@@ -207,7 +207,7 @@
             </svg>
             移动
           </button>
-          <button @click="batchDelete" class="toolbar-btn danger">
+          <button v-if="canWrite()" @click="batchDelete" class="toolbar-btn danger">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3,6 5,6 21,6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -320,24 +320,24 @@
             <span>复制链接</span>
           </button>
         </li>
-        <li>
+        <li v-if="canWrite()">
           <button @click="moveFile(focusedItem + '_$folder$')">
             <span>移动</span>
           </button>
         </li>
-        <li v-if="clipboard">
+        <li v-if="clipboard && canWrite()">
           <button @click="pasteFile()">
             <span>粘贴</span>
           </button>
         </li>
-        <li>
+        <li v-if="canWrite()">
           <button style="color: red" @click="removeFile(focusedItem + '_$folder$')">
             <span>删除</span>
           </button>
         </li>
       </ul>
       <ul v-else class="contextmenu-list">
-        <li>
+        <li v-if="canWrite()">
           <button @click="renameFile(focusedItem.key)">
             <span>重命名</span>
           </button>
@@ -352,7 +352,7 @@
             <span>复制</span>
           </button>
         </li>
-        <li>
+        <li v-if="canWrite()">
           <button @click="moveFile(focusedItem.key)">
             <span>移动</span>
           </button>
@@ -362,12 +362,12 @@
             <span>复制链接</span>
           </button>
         </li>
-        <li v-if="clipboard">
+        <li v-if="clipboard && canWrite()">
           <button @click="pasteFile()">
             <span>粘贴</span>
           </button>
         </li>
-        <li>
+        <li v-if="canWrite()">
           <button style="color: red" @click="removeFile(focusedItem.key)">
             <span>删除</span>
           </button>
@@ -465,7 +465,6 @@
     </div>
 
     <!-- 移动端底部粘贴工具栏 -->
-    <!-- 调试信息：clipboard={{ !!clipboard }}, isMobile={{ isMobile }}, canUpload={{ canUpload }} -->
     <div
       v-if="clipboard && isMobile"
       class="mobile-paste-toolbar"
@@ -698,6 +697,20 @@ export default {
         return false;
       }
       // 已登录用户可以上传
+      return this.isLoggedIn;
+    },
+
+    // 检查是否可以进行写操作（移动、复制、粘贴、删除）
+    canWrite() {
+      // 游客不允许写操作
+      if (this.isGuest) {
+        return false;
+      }
+      // 只读用户不允许写操作
+      if (this.isReadOnlyUser) {
+        return false;
+      }
+      // 已登录用户可以写操作
       return this.isLoggedIn;
     },
 
@@ -1254,13 +1267,15 @@ export default {
 
     // 移动端长按进入多选模式
     handleTouchStart(file) {
-      // 记录触摸开始时间和位置
+      // 记录触摸开始时间
       this.touchStartTime = Date.now();
       this.touchedFile = file.key;
       this.isLongPress = false;
 
       // 如果已经在多选模式，不需要设置长按定时器
-      if (this.isMultiSelectMode) return;
+      if (this.isMultiSelectMode) {
+        return;
+      }
 
       // 设置长按定时器
       this.touchTimer = setTimeout(() => {
@@ -1278,24 +1293,24 @@ export default {
     },
 
     handleTouchEnd() {
+      const touchDuration = Date.now() - (this.touchStartTime || 0);
+
       // 清理长按定时器
       if (this.touchTimer) {
         clearTimeout(this.touchTimer);
         this.touchTimer = null;
       }
 
-      // 如果是短时间触摸且在多选模式下，不阻止点击
-      const touchDuration = Date.now() - (this.touchStartTime || 0);
-      if (touchDuration < 500 && this.isMultiSelectMode) {
-        // 短按在多选模式下应该正常触发点击
+      // 在多选模式下，短按不应该被标记为长按
+      if (this.isMultiSelectMode && touchDuration < 500) {
         this.isLongPress = false;
         return;
       }
 
-      // 重置长按标记（延迟重置，避免影响点击事件）
+      // 延迟重置长按标记
       setTimeout(() => {
         this.isLongPress = false;
-      }, 50);
+      }, 100);
     },
 
     isFileSelected(fileKey) {
@@ -1345,13 +1360,19 @@ export default {
     batchCopy() {
       if (this.selectedFiles.length === 0) return;
 
-      // 支持多文件复制
+      // 复制操作不需要写权限，只是复制到剪贴板
       this.clipboard = this.selectedFiles.length === 1 ? this.selectedFiles[0] : this.selectedFiles;
       this.showCustomToast(`已复制 ${this.selectedFiles.length} 个文件到剪贴板`, 'success');
     },
 
     async batchMove() {
       if (this.selectedFiles.length === 0) return;
+
+      // 检查写权限
+      if (!this.canWrite()) {
+        this.showPermissionDialog('移动文件');
+        return;
+      }
 
       try {
         console.log('🚀 开始批量移动文件:', this.selectedFiles);
@@ -1415,6 +1436,12 @@ export default {
 
     async batchDelete() {
       if (this.selectedFiles.length === 0) return;
+
+      // 检查写权限
+      if (!this.canWrite()) {
+        this.showPermissionDialog('删除文件');
+        return;
+      }
 
       try {
         const fileNames = this.selectedFiles.map(key => key.split('/').pop()).join('、');
@@ -1700,14 +1727,15 @@ export default {
 
     // 处理文件点击（区分搜索结果和普通文件）
     handleFileClick(file) {
-      // 如果是长按触发的，忽略点击事件
-      if (this.isLongPress) {
+      // 如果处于多选模式，点击文件切换选择状态
+      if (this.isMultiSelectMode) {
+        // 在多选模式下，总是切换选择状态，不管是否长按
+        this.toggleFileSelection(file.key);
         return;
       }
 
-      // 如果处于多选模式，点击文件切换选择状态
-      if (this.isMultiSelectMode) {
-        this.toggleFileSelection(file.key);
+      // 如果是长按触发的，忽略点击事件（仅在非多选模式下）
+      if (this.isLongPress) {
         return;
       }
 
@@ -1799,6 +1827,12 @@ export default {
 
     async pasteFile() {
       if (!this.clipboard) return;
+
+      // 检查写权限
+      if (!this.canWrite()) {
+        this.showPermissionDialog('粘贴文件');
+        return;
+      }
 
       try {
         // 检查是否是多文件粘贴
@@ -1953,6 +1987,12 @@ export default {
     },
 
     async removeFile(key) {
+      // 检查写权限
+      if (!this.canWrite()) {
+        this.showPermissionDialog('删除文件');
+        return;
+      }
+
       try {
         const fileName = key.split('/').pop();
         const confirmed = await this.showConfirmPrompt(
@@ -1979,6 +2019,12 @@ export default {
     },
 
     async renameFile(key) {
+      // 检查写权限
+      if (!this.canWrite()) {
+        this.showPermissionDialog('重命名文件');
+        return;
+      }
+
       try {
         const currentName = key.split('/').pop();
         const newName = await this.showInputPrompt("重命名文件", "新名称:", currentName);
@@ -2001,6 +2047,12 @@ export default {
     },
 
     async moveFile(key) {
+      // 检查写权限
+      if (!this.canWrite()) {
+        this.showPermissionDialog('移动文件');
+        return;
+      }
+
       let targetPath = null; // 声明在外层作用域，以便错误处理时使用
 
       console.log('🚀 开始移动文件:', key);
