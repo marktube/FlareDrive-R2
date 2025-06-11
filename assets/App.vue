@@ -1374,6 +1374,8 @@ export default {
     },
 
     async moveFile(key) {
+      let targetPath = null; // 声明在外层作用域，以便错误处理时使用
+
       try {
         // 获取用户有权限的目录列表
         const accessibleFolders = await this.getAccessibleFolders();
@@ -1395,7 +1397,7 @@ export default {
         });
 
         // 使用自定义文件夹选择器
-        const targetPath = await this.showFolderSelector('选择目标目录', folderOptions);
+        targetPath = await this.showFolderSelector('选择目标目录', folderOptions);
         if (targetPath === null || targetPath === undefined) return; // 用户取消
 
         // 获取文件名
@@ -1465,7 +1467,11 @@ export default {
         }
 
         console.error('移动失败:', error);
-        alert('移动失败,请检查目标路径是否正确');
+
+        // 根据目标路径给出更具体的错误提示
+        const targetDisplayName = targetPath === '' ? '根目录' :
+          targetPath.replace(/.*\/(?!$)|\//g, '') + '/';
+        alert(`移动文件到 ${targetDisplayName} 失败：您可能没有该目录的写入权限，或者目标路径不正确。`);
       }
     },
 
@@ -1478,8 +1484,8 @@ export default {
         return accessibleFolders;
       }
 
-      // 检查目录是否有写入权限
-      const checkWritePermission = async (path) => {
+      // 简化的权限检查：只检查读取权限，写入权限在实际操作时验证
+      const checkReadPermission = async (path) => {
         try {
           // 准备请求头
           const headers = {};
@@ -1488,7 +1494,7 @@ export default {
             headers['Authorization'] = `Basic ${savedCredentials}`;
           }
 
-          // 首先检查读取权限
+          // 检查读取权限
           const response = await fetch(`/api/children/${path}`, { headers });
           const data = await response.json();
 
@@ -1497,20 +1503,7 @@ export default {
             return false;
           }
 
-          // 然后检查写入权限：尝试访问写入API端点
-          const writeCheckUrl = `/api/write/items/${path}test_permission_check`;
-          const writeResponse = await fetch(writeCheckUrl, {
-            method: 'HEAD', // 使用HEAD请求，不会实际创建文件
-            headers: headers
-          });
-
-          // 如果写入端点返回401或403，说明没有写入权限
-          if (writeResponse.status === 401 || writeResponse.status === 403) {
-            return false;
-          }
-
-          // 如果HEAD请求成功或返回404（文件不存在但有权限），说明有写入权限
-          return writeResponse.status !== 401 && writeResponse.status !== 403;
+          return true;
         } catch (error) {
           return false;
         }
@@ -1563,7 +1556,7 @@ export default {
           continue;
         }
 
-        if (await checkWritePermission(path)) {
+        if (await checkReadPermission(path)) {
           let displayName;
 
           if (path === '') {
