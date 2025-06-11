@@ -614,25 +614,80 @@ export default {
       const uploadUrl = `/api/write/items/${target}`;
 
       // 准备请求头
-      const headers = { "x-amz-copy-source": encodeURIComponent(source) };
+      const headers = {
+        "x-amz-copy-source": encodeURIComponent(source),
+        "Content-Type": "application/octet-stream"
+      };
       const savedCredentials = localStorage.getItem('authCredentials');
       if (savedCredentials) {
         headers['Authorization'] = `Basic ${savedCredentials}`;
       }
 
       try {
-        await axios.put(uploadUrl, "", { headers });
-      } catch (error) {
-        // 检查是否是权限问题
-        if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-          // 抛出特殊的权限错误，让调用方处理
-          const authError = new Error('需要登录或权限不足');
-          authError.isAuthError = true;
-          authError.originalError = error;
-          throw authError;
+        const response = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: headers,
+          body: ""
+        });
+
+        // 检查响应状态
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            // 抛出特殊的权限错误，让调用方处理
+            const authError = new Error('需要登录或权限不足');
+            authError.isAuthError = true;
+            authError.status = response.status;
+            throw authError;
+          }
+          // 其他HTTP错误
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        // 其他错误直接抛出
-        throw error;
+      } catch (error) {
+        // 如果已经是我们的权限错误，直接抛出
+        if (error.isAuthError) {
+          throw error;
+        }
+        // 网络错误或其他错误
+        throw new Error(`复制粘贴失败: ${error.message}`);
+      }
+    },
+
+    // 删除文件的统一方法
+    async deleteFile(key) {
+      const deleteUrl = `/api/write/items/${key}`;
+
+      // 准备请求头
+      const headers = {};
+      const savedCredentials = localStorage.getItem('authCredentials');
+      if (savedCredentials) {
+        headers['Authorization'] = `Basic ${savedCredentials}`;
+      }
+
+      try {
+        const response = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: headers
+        });
+
+        // 检查响应状态
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            // 抛出特殊的权限错误，让调用方处理
+            const authError = new Error('需要登录或权限不足');
+            authError.isAuthError = true;
+            authError.status = response.status;
+            throw authError;
+          }
+          // 其他HTTP错误
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (error) {
+        // 如果已经是我们的权限错误，直接抛出
+        if (error.isAuthError) {
+          throw error;
+        }
+        // 网络错误或其他错误
+        throw new Error(`删除文件失败: ${error.message}`);
       }
     },
 
@@ -1282,8 +1337,18 @@ export default {
 
     async removeFile(key) {
       if (!window.confirm(`确定要删除 ${key} 吗？`)) return;
-      await axios.delete(`/api/write/items/${key}`);
-      this.fetchFiles();
+      try {
+        await this.deleteFile(key);
+        this.fetchFiles();
+      } catch (error) {
+        // 检查是否是权限错误
+        if (error.isAuthError) {
+          this.showPermissionDialog('删除文件');
+          return;
+        }
+        console.error('删除失败:', error);
+        alert('删除失败: ' + (error.message || '未知错误'));
+      }
     },
 
     async renameFile(key) {
@@ -1292,7 +1357,7 @@ export default {
         const newName = await this.showInputPrompt("重命名文件", "新名称:", currentName);
         if (!newName) return;
         await this.copyPaste(key, `${this.cwd}${newName}`);
-        await axios.delete(`/api/write/items/${key}`);
+        await this.deleteFile(key);
         this.fetchFiles();
       } catch (error) {
         if (error === null) return; // 用户取消
@@ -1364,7 +1429,7 @@ export default {
               // 复制到新位置
               await this.copyPaste(item.key, newPath);
               // 删除原位置
-              await axios.delete(`/api/write/items/${item.key}`);
+              await this.deleteFile(item.key);
 
               // 更新进度
               processedItems++;
@@ -1377,7 +1442,7 @@ export default {
           // 移动目录标记
           const targetFolderPath = targetBasePath.slice(0, -1) + '_$folder$';
           await this.copyPaste(key, targetFolderPath);
-          await axios.delete(`/api/write/items/${key}`);
+          await this.deleteFile(key);
 
           // 清除进度
           this.uploadProgress = null;
@@ -1385,7 +1450,7 @@ export default {
           // 单文件移动逻辑，修复根目录的情况
           const targetFilePath = normalizedPath + finalFileName;
           await this.copyPaste(key, targetFilePath);
-          await axios.delete(`/api/write/items/${key}`);
+          await this.deleteFile(key);
         }
 
         // 刷新文件列表
@@ -1413,7 +1478,7 @@ export default {
         return accessibleFolders;
       }
 
-      // 检查目录是否有写入权限的简化版本
+      // 检查目录是否有写入权限
       const checkWritePermission = async (path) => {
         try {
           // 准备请求头
@@ -1434,43 +1499,72 @@ export default {
         }
       };
 
-      // 构建候选目录列表
-      const candidateFolders = [];
+      // 收集所有可能的目录
+      const allPossibleFolders = new Set();
 
       // 1. 添加根目录
-      candidateFolders.push({ path: '', displayName: '根目录' });
+      allPossibleFolders.add('');
 
       // 2. 添加当前目录（如果不是根目录）
       if (this.cwd !== '') {
-        candidateFolders.push({ path: this.cwd, displayName: '当前目录' });
+        allPossibleFolders.add(this.cwd);
       }
 
       // 3. 添加上级目录
       if (this.cwd !== '') {
         const parentPath = this.cwd.replace(/[^\/]+\/$/, '');
-        const parentDisplayName = parentPath === '' ? '根目录' :
-          parentPath.replace(/.*\/(?!$)|\//g, '') + '/';
-        candidateFolders.push({
-          path: parentPath,
-          displayName: `上级目录 (${parentDisplayName})`
-        });
+        allPossibleFolders.add(parentPath);
       }
 
       // 4. 添加当前目录下的子目录
       if (this.folders && this.folders.length > 0) {
         for (const folder of this.folders) {
-          const displayName = folder.replace(/.*\/(?!$)|\//g, '') + '/';
-          candidateFolders.push({
-            path: folder,
-            displayName: displayName
-          });
+          allPossibleFolders.add(folder);
         }
       }
 
-      // 5. 检查每个候选目录的权限
-      for (const folder of candidateFolders) {
-        if (await checkWritePermission(folder.path)) {
-          accessibleFolders.push(folder);
+      // 5. 尝试发现根目录下的其他顶级目录
+      try {
+        const headers = {};
+        const savedCredentials = localStorage.getItem('authCredentials');
+        if (savedCredentials) {
+          headers['Authorization'] = `Basic ${savedCredentials}`;
+        }
+
+        const response = await fetch(`/api/children/`, { headers });
+        const data = await response.json();
+
+        if (!data.needLogin && data.folders) {
+          // 添加根目录下的所有目录
+          for (const folder of data.folders) {
+            allPossibleFolders.add(folder);
+          }
+        }
+      } catch (error) {
+        console.error('获取根目录失败:', error);
+      }
+
+      // 6. 检查每个目录的权限并构建结果
+      for (const path of allPossibleFolders) {
+        if (await checkWritePermission(path)) {
+          let displayName;
+
+          if (path === '') {
+            displayName = '根目录';
+          } else if (path === this.cwd) {
+            displayName = '当前目录';
+          } else if (this.cwd !== '' && path === this.cwd.replace(/[^\/]+\/$/, '')) {
+            const parentDisplayName = path === '' ? '根目录' :
+              path.replace(/.*\/(?!$)|\//g, '') + '/';
+            displayName = `上级目录 (${parentDisplayName})`;
+          } else {
+            displayName = path.replace(/.*\/(?!$)|\//g, '') + '/';
+          }
+
+          accessibleFolders.push({
+            path: path,
+            displayName: displayName
+          });
         }
       }
 
