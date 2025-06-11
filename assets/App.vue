@@ -947,13 +947,13 @@ export default {
     // 初始化粘贴按钮位置
     initPasteButtonPosition() {
       if (this.isMobile) {
-        // 移动端：右下角，避开返回按钮区域
-        this.pasteButtonPosition.x = window.innerWidth - 80;
-        this.pasteButtonPosition.y = window.innerHeight - 150;
+        // 移动端：右上角导航栏下方
+        this.pasteButtonPosition.x = window.innerWidth - 70;
+        this.pasteButtonPosition.y = 80; // 导航栏下方
       } else {
-        // 桌面端：左侧中间
-        this.pasteButtonPosition.x = 20;
-        this.pasteButtonPosition.y = window.innerHeight / 2 - 50;
+        // 桌面端：右上角导航栏下方
+        this.pasteButtonPosition.x = window.innerWidth - 120;
+        this.pasteButtonPosition.y = 80; // 导航栏下方
       }
     },
 
