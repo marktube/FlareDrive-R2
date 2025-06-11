@@ -24,9 +24,12 @@ const emit = defineEmits(["update:modelValue", "click"]);
         <li
           v-for="(item, index) in items"
           :key="index"
+          :class="{ disabled: item.disabled }"
           @click="
-            emit('update:modelValue', false);
-            emit('click', item.text);
+            if (!item.disabled) {
+              emit('update:modelValue', false);
+              emit('click', item.text);
+            }
           "
         >
           <span v-text="item.text"></span>
@@ -67,6 +70,15 @@ const emit = defineEmits(["update:modelValue", "click"]);
 
 .menu-content li:hover {
   background-color: rgba(0, 0, 0, 0.1);
+}
+
+.menu-content li.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.menu-content li.disabled:hover {
+  background-color: transparent;
 }
 
 /* 移动端菜单优化 */

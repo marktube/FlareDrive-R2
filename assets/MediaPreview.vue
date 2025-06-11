@@ -60,8 +60,8 @@
         <div v-if="isMobile" class="mobile-top-controls">
           <div class="media-info">
             <span class="media-name">{{ currentMedia.name }}</span>
-            <span v-if="mediaList.length > 1" class="media-counter">
-              {{ currentIndex + 1 }} / {{ mediaList.length }}
+            <span v-if="filteredMediaList.length > 1" class="media-counter">
+              {{ currentIndex + 1 }} / {{ filteredMediaList.length }}
             </span>
           </div>
           <div class="mobile-top-actions">
@@ -90,8 +90,8 @@
         <div v-else class="top-controls">
           <div class="media-info">
             <span class="media-name">{{ currentMedia.name }}</span>
-            <span v-if="mediaList.length > 1" class="media-counter">
-              {{ currentIndex + 1 }} / {{ mediaList.length }}
+            <span v-if="filteredMediaList.length > 1" class="media-counter">
+              {{ currentIndex + 1 }} / {{ filteredMediaList.length }}
             </span>
           </div>
           <div class="top-actions">
@@ -116,35 +116,35 @@
           </div>
         </div>
 
-        <!-- 底部控制栏 - 仅桌面端显示导航按钮 -->
-        <div v-if="isImage && !isMobile" class="bottom-controls">
-          <!-- 导航按钮 -->
-          <div class="navigation-controls">
-            <button
-              v-if="mediaList.length > 1"
-              class="control-btn nav-btn"
-              @click="previousMedia"
-              :disabled="currentIndex === 0"
-              title="上一张"
-            >
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                <path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z" />
-              </svg>
-            </button>
+        <!-- 左右导航按钮 -->
+        <div v-if="filteredMediaList.length > 1" class="side-navigation">
+          <!-- 左侧上一张按钮 -->
+          <button
+            class="control-btn nav-btn side-nav-btn left-nav"
+            @click="previousMedia"
+            :disabled="currentIndex === 0"
+            title="上一张"
+          >
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+              <path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z" />
+            </svg>
+          </button>
 
-            <button
-              v-if="mediaList.length > 1"
-              class="control-btn nav-btn"
-              @click="nextMedia"
-              :disabled="currentIndex === mediaList.length - 1"
-              title="下一张"
-            >
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" />
-              </svg>
-            </button>
-          </div>
+          <!-- 右侧下一张按钮 -->
+          <button
+            class="control-btn nav-btn side-nav-btn right-nav"
+            @click="nextMedia"
+            :disabled="currentIndex === filteredMediaList.length - 1"
+            title="下一张"
+          >
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+              <path d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" />
+            </svg>
+          </button>
+        </div>
 
+        <!-- 底部控制栏 - 仅显示图片控制按钮 -->
+        <div v-if="isImage" class="bottom-controls">
           <!-- 图片控制按钮 -->
           <div class="image-controls">
             <button class="control-btn" @click="zoomOut" title="缩小">
@@ -175,36 +175,7 @@
           </div>
         </div>
 
-        <!-- 移动端底部控制栏 - 仅显示图片控制按钮 -->
-        <div v-if="isImage && isMobile" class="mobile-bottom-controls">
-          <div class="mobile-image-controls">
-            <button class="control-btn" @click="zoomOut" title="缩小">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                <path d="M15.5,14L20.5,19L19,20.5L14,15.5V14.71L13.73,14.43C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.43,13.73L14.71,14H15.5M9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14M7,9V10H12V9H7Z" />
-              </svg>
-            </button>
 
-            <span class="zoom-level">{{ Math.round(scale * 100) }}%</span>
-
-            <button class="control-btn" @click="zoomIn" title="放大">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                <path d="M15.5,14L20.5,19L19,20.5L14,15.5V14.71L13.73,14.43C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.43,13.73L14.71,14H15.5M9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14M10,7H9V9H7V10H9V12H10V10H12V9H10V7Z" />
-              </svg>
-            </button>
-
-            <button class="control-btn" @click="rotateImage" title="旋转">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                <path d="M12,3A9,9 0 0,0 3,12H0L4,16L8,12H5A7,7 0 0,1 12,5A7,7 0 0,1 19,12A7,7 0 0,1 12,19C10.5,19 9.09,18.5 7.94,17.7L6.5,19.14C8.04,20.3 9.94,21 12,21A9,9 0 0,0 21,12A9,9 0 0,0 12,3Z" />
-              </svg>
-            </button>
-
-            <button class="control-btn" @click="resetImage" title="重置">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                <path d="M12,3A9,9 0 0,1 21,12A9,9 0 0,1 12,21A9,9 0 0,1 3,12A9,9 0 0,1 12,3M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9Z" />
-              </svg>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -294,11 +265,11 @@ export default {
   },
   computed: {
     currentMedia() {
-      const media = this.mediaList[this.currentIndex] || {};
+      const media = this.filteredMediaList[this.currentIndex] || {};
       return media;
     },
     isImage() {
-      const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+      const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
       const ext = this.currentMedia.name?.split('.').pop()?.toLowerCase();
       return imageTypes.includes(ext);
     },
@@ -307,6 +278,45 @@ export default {
       const ext = this.currentMedia.name?.split('.').pop()?.toLowerCase();
       return videoTypes.includes(ext);
     },
+    // 过滤后的媒体列表 - 只包含当前类型的媒体
+    filteredMediaList() {
+      if (!this.mediaList.length) return [];
+
+      const currentMedia = this.mediaList[this.initialIndex];
+      if (!currentMedia) return this.mediaList;
+
+      const currentExt = currentMedia.name?.split('.').pop()?.toLowerCase();
+      const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+      const videoTypes = ['mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
+
+      const isCurrentImage = imageTypes.includes(currentExt);
+      const isCurrentVideo = videoTypes.includes(currentExt);
+
+      if (isCurrentImage) {
+        // 如果当前是图片，只返回图片
+        return this.mediaList.filter(media => {
+          const ext = media.name?.split('.').pop()?.toLowerCase();
+          return imageTypes.includes(ext);
+        });
+      } else if (isCurrentVideo) {
+        // 如果当前是视频，只返回视频
+        return this.mediaList.filter(media => {
+          const ext = media.name?.split('.').pop()?.toLowerCase();
+          return videoTypes.includes(ext);
+        });
+      }
+
+      return this.mediaList;
+    },
+    // 当前媒体在过滤后列表中的索引
+    filteredCurrentIndex() {
+      if (!this.filteredMediaList.length) return 0;
+
+      const currentMedia = this.mediaList[this.currentIndex];
+      if (!currentMedia) return 0;
+
+      return this.filteredMediaList.findIndex(media => media.key === currentMedia.key);
+    }
     imageStyle() {
       return {
         transform: `scale(${this.scale}) rotate(${this.rotation}deg) translate(${this.translateX}px, ${this.translateY}px)`,
@@ -317,7 +327,8 @@ export default {
   watch: {
     show(newVal) {
       if (newVal) {
-        this.currentIndex = this.initialIndex;
+        // 计算在过滤后列表中的正确索引
+        this.currentIndex = this.filteredCurrentIndex;
         this.loading = true; // 显示时开始加载
         this.error = false;
         this.resetImage();
@@ -346,7 +357,7 @@ export default {
     },
     initialIndex(newVal) {
       if (this.show) {
-        this.currentIndex = newVal;
+        this.currentIndex = this.filteredCurrentIndex;
       }
     }
   },
@@ -383,7 +394,7 @@ export default {
       }
     },
     nextMedia() {
-      if (this.currentIndex < this.mediaList.length - 1) {
+      if (this.currentIndex < this.filteredMediaList.length - 1) {
         this.currentIndex++;
       }
     },
@@ -619,7 +630,7 @@ export default {
         const deltaY = touch.clientY - this.swipeStartY;
 
         // 检测是否为滑动手势（移动端导航）
-        if (!this.isSwipeGesture && this.isMobile && this.scale <= 1 && this.mediaList.length > 1) {
+        if (!this.isSwipeGesture && this.isMobile && this.scale <= 1 && this.filteredMediaList.length > 1) {
           const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
           if (distance > 30) { // 滑动阈值
             const angle = Math.abs(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
@@ -652,7 +663,7 @@ export default {
 
       if (e.touches.length === 0) {
         // 处理滑动手势
-        if (this.isSwipeGesture && this.isMobile && this.mediaList.length > 1) {
+        if (this.isSwipeGesture && this.isMobile && this.filteredMediaList.length > 1) {
           const deltaX = e.changedTouches[0].clientX - this.swipeStartX;
           const threshold = 80; // 滑动阈值
 
@@ -660,7 +671,7 @@ export default {
             if (deltaX > 0 && this.currentIndex > 0) {
               // 向右滑动 - 上一张
               this.previousMedia();
-            } else if (deltaX < 0 && this.currentIndex < this.mediaList.length - 1) {
+            } else if (deltaX < 0 && this.currentIndex < this.filteredMediaList.length - 1) {
               // 向左滑动 - 下一张
               this.nextMedia();
             }
@@ -830,6 +841,49 @@ export default {
   gap: 8px;
 }
 
+/* 左右导航按钮 */
+.side-navigation {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.side-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: auto;
+  width: 60px;
+  height: 60px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  opacity: 0.7;
+  transition: all 0.3s ease;
+}
+
+.side-nav-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.7);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.side-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: translateY(-50%);
+}
+
+.left-nav {
+  left: 20px;
+}
+
+.right-nav {
+  right: 20px;
+}
+
 .bottom-controls {
   position: absolute;
   bottom: 20px;
@@ -839,11 +893,6 @@ export default {
   gap: 20px;
   align-items: center;
   pointer-events: auto;
-}
-
-.navigation-controls {
-  display: flex;
-  gap: 8px;
 }
 
 .image-controls {
@@ -929,24 +978,7 @@ export default {
   gap: 8px;
 }
 
-/* 移动端底部控制栏 */
-.mobile-bottom-controls {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: auto;
-}
 
-.mobile-image-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 10px 15px;
-  border-radius: 25px;
-  backdrop-filter: blur(10px);
-}
 
 /* 分享模态框 */
 .share-modal {
@@ -1029,11 +1061,24 @@ export default {
     font-size: 14px;
   }
 
-  .mobile-bottom-controls {
+  .side-nav-btn {
+    width: 50px;
+    height: 50px;
+  }
+
+  .left-nav {
+    left: 10px;
+  }
+
+  .right-nav {
+    right: 10px;
+  }
+
+  .bottom-controls {
     bottom: 10px;
   }
 
-  .mobile-image-controls {
+  .image-controls {
     padding: 8px 12px;
     gap: 6px;
   }
@@ -1053,9 +1098,8 @@ export default {
     margin: 20px;
   }
 
-  /* 隐藏桌面端控制栏 */
-  .top-controls,
-  .bottom-controls {
+  /* 隐藏桌面端顶部控制栏 */
+  .top-controls {
     display: none;
   }
 }
@@ -1072,7 +1116,12 @@ export default {
     justify-content: center;
   }
 
-  .mobile-image-controls {
+  .side-nav-btn {
+    width: 45px;
+    height: 45px;
+  }
+
+  .image-controls {
     flex-wrap: wrap;
     justify-content: center;
     gap: 8px;

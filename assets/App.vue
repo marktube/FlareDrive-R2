@@ -133,7 +133,12 @@
           </svg>
         </button>
         <Menu v-model="showMenu"
-          :items="[{ text: '按照名称排序A-Z' }, { text: '按照大小递增排序' }, { text: '按照大小递减排序' }, { text: '粘贴文件到网盘' }]"
+          :items="[
+            { text: '按照名称排序A-Z' },
+            { text: '按照大小递增排序' },
+            { text: '按照大小递减排序' },
+            { text: '粘贴文件到网盘', disabled: !clipboard }
+          ]"
           @click="onMenuClick" />
         </div>
       </div>
@@ -246,6 +251,11 @@
             <span>移动</span>
           </button>
         </li>
+        <li v-if="clipboard">
+          <button @click="pasteFile()">
+            <span>粘贴</span>
+          </button>
+        </li>
         <li>
           <button style="color: red" @click="removeFile(focusedItem + '_$folder$')">
             <span>删除</span>
@@ -278,6 +288,11 @@
             <span>复制链接</span>
           </button>
         </li>
+        <li v-if="clipboard">
+          <button @click="pasteFile()">
+            <span>粘贴</span>
+          </button>
+        </li>
         <li>
           <button style="color: red" @click="removeFile(focusedItem.key)">
             <span>删除</span>
@@ -293,6 +308,50 @@
       :initialIndex="previewInitialIndex"
       @close="closeMediaPreview"
     />
+
+    <!-- 自定义输入对话框 -->
+    <Dialog v-model="showInputDialog">
+      <div style="padding: 20px;">
+        <h3 v-text="inputDialog.title" style="margin: 0 0 15px 0;"></h3>
+        <input
+          v-model="inputDialog.value"
+          :placeholder="inputDialog.placeholder"
+          style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px;"
+          @keyup.enter="confirmInput"
+          ref="inputField"
+        />
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button @click="cancelInput" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px;">取消</button>
+          <button @click="confirmInput" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px;">确定</button>
+        </div>
+      </div>
+    </Dialog>
+
+    <!-- 目录选择对话框 -->
+    <Dialog v-model="showFolderDialog">
+      <div style="padding: 20px;">
+        <h3 v-text="folderDialog.title" style="margin: 0 0 15px 0;"></h3>
+        <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px;">
+          <div
+            v-for="(folder, index) in folderDialog.folders"
+            :key="index"
+            @click="selectFolder(folder)"
+            :class="{ 'selected': folderDialog.selectedFolder === folder.value }"
+            style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;"
+            :style="{
+              backgroundColor: folderDialog.selectedFolder === folder.value ? '#e3f2fd' : 'transparent',
+              fontWeight: folderDialog.selectedFolder === folder.value ? 'bold' : 'normal'
+            }"
+          >
+            <span v-text="folder.display"></span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button @click="cancelFolderSelection" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px;">取消</button>
+          <button @click="confirmFolderSelection" :disabled="!folderDialog.selectedFolder" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; opacity: folderDialog.selectedFolder ? 1 : 0.5;">确定</button>
+        </div>
+      </div>
+    </Dialog>
 
     <div style="flex:1"></div>
     <Footer />
@@ -348,7 +407,24 @@ export default {
     // 媒体预览相关
     showMediaPreview: false,
     previewMediaList: [],
-    previewInitialIndex: 0
+    previewInitialIndex: 0,
+    // 自定义对话框相关
+    showInputDialog: false,
+    inputDialog: {
+      title: '',
+      placeholder: '',
+      value: '',
+      resolve: null,
+      reject: null
+    },
+    showFolderDialog: false,
+    folderDialog: {
+      title: '',
+      folders: [],
+      selectedFolder: null,
+      resolve: null,
+      reject: null
+    }
   }),
 
   computed: {
@@ -500,13 +576,14 @@ export default {
 
     async createFolder() {
       try {
-        const folderName = window.prompt("请输入文件夹名称");
+        const folderName = await this.showInputPrompt("创建文件夹", "请输入文件夹名称");
         if (!folderName) return;
         this.showUploadPopup = false;
         const uploadUrl = `/api/write/items/${this.cwd}${folderName}/_$folder$`;
         await axios.put(uploadUrl, "");
         this.fetchFiles();
       } catch (error) {
+        if (error === null) return; // 用户取消
         fetch("/api/write/")
           .then((value) => {
             if (value.redirected) window.location.href = value.url;
@@ -755,6 +832,72 @@ export default {
       this.showLoginModal();
     },
 
+    // 自定义输入对话框
+    showInputPrompt(title, placeholder = '', defaultValue = '') {
+      return new Promise((resolve, reject) => {
+        this.inputDialog = {
+          title,
+          placeholder,
+          value: defaultValue,
+          resolve,
+          reject
+        };
+        this.showInputDialog = true;
+        // 等待DOM更新后聚焦输入框
+        this.$nextTick(() => {
+          if (this.$refs.inputField) {
+            this.$refs.inputField.focus();
+          }
+        });
+      });
+    },
+
+    confirmInput() {
+      if (this.inputDialog.resolve) {
+        this.inputDialog.resolve(this.inputDialog.value);
+      }
+      this.showInputDialog = false;
+    },
+
+    cancelInput() {
+      if (this.inputDialog.reject) {
+        this.inputDialog.reject(null);
+      }
+      this.showInputDialog = false;
+    },
+
+    // 自定义文件夹选择对话框
+    showFolderSelector(title, folders) {
+      return new Promise((resolve, reject) => {
+        this.folderDialog = {
+          title,
+          folders,
+          selectedFolder: null,
+          resolve,
+          reject
+        };
+        this.showFolderDialog = true;
+      });
+    },
+
+    selectFolder(folder) {
+      this.folderDialog.selectedFolder = folder.value;
+    },
+
+    confirmFolderSelection() {
+      if (this.folderDialog.resolve && this.folderDialog.selectedFolder !== null) {
+        this.folderDialog.resolve(this.folderDialog.selectedFolder);
+      }
+      this.showFolderDialog = false;
+    },
+
+    cancelFolderSelection() {
+      if (this.folderDialog.reject) {
+        this.folderDialog.reject(null);
+      }
+      this.showFolderDialog = false;
+    },
+
     onMenuClick(text) {
       switch (text) {
         case "按照名称排序A-Z":
@@ -794,9 +937,12 @@ export default {
     // 处理文件点击（区分搜索结果和普通文件）
     handleFileClick(file) {
       // 检查是否是媒体文件
-      const mediaTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
+      const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+      const videoTypes = ['mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
       const ext = file.key?.split('.').pop()?.toLowerCase();
-      const isMediaFile = mediaTypes.includes(ext);
+      const isImageFile = imageTypes.includes(ext);
+      const isVideoFile = videoTypes.includes(ext);
+      const isMediaFile = isImageFile || isVideoFile;
 
       if (isMediaFile) {
         // 媒体文件：打开预览
@@ -816,24 +962,39 @@ export default {
 
     // 打开媒体预览
     openMediaPreview(clickedFile) {
+      // 确定点击文件的类型
+      const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+      const videoTypes = ['mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
+      const clickedExt = clickedFile.key?.split('.').pop()?.toLowerCase();
+      const isClickedImage = imageTypes.includes(clickedExt);
+      const isClickedVideo = videoTypes.includes(clickedExt);
+
       // 确定媒体文件列表和初始索引
       let mediaList = [];
       let initialIndex = 0;
 
       if (this.search && this.searchResults.length > 0) {
-        // 搜索结果中的媒体文件
+        // 搜索结果中的同类型媒体文件
         mediaList = this.searchResults.filter(file => {
           if (file.isFolder) return false;
-          const mediaTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
           const ext = file.key?.split('.').pop()?.toLowerCase();
-          return mediaTypes.includes(ext);
+          if (isClickedImage) {
+            return imageTypes.includes(ext);
+          } else if (isClickedVideo) {
+            return videoTypes.includes(ext);
+          }
+          return false;
         });
       } else {
-        // 当前目录中的媒体文件
+        // 当前目录中的同类型媒体文件
         mediaList = this.filteredFiles.filter(file => {
-          const mediaTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
           const ext = file.key?.split('.').pop()?.toLowerCase();
-          return mediaTypes.includes(ext);
+          if (isClickedImage) {
+            return imageTypes.includes(ext);
+          } else if (isClickedVideo) {
+            return videoTypes.includes(ext);
+          }
+          return false;
         });
       }
 
@@ -863,11 +1024,17 @@ export default {
 
     async pasteFile() {
       if (!this.clipboard) return;
-      let newName = window.prompt("Rename to:");
-      if (newName === null) return;
-      if (newName === "") newName = this.clipboard.split("/").pop();
-      await this.copyPaste(this.clipboard, `${this.cwd}${newName}`);
-      this.fetchFiles();
+      try {
+        const defaultName = this.clipboard.split("/").pop();
+        let newName = await this.showInputPrompt("粘贴文件", "重命名为:", defaultName);
+        if (newName === null || newName === undefined) return;
+        if (newName === "") newName = defaultName;
+        await this.copyPaste(this.clipboard, `${this.cwd}${newName}`);
+        this.fetchFiles();
+      } catch (error) {
+        if (error === null) return; // 用户取消
+        console.error('粘贴文件失败:', error);
+      }
     },
 
     async processUploadQueue() {
@@ -938,59 +1105,52 @@ export default {
     },
 
     async renameFile(key) {
-      const newName = window.prompt("重命名为:");
-      if (!newName) return;
-      await this.copyPaste(key, `${this.cwd}${newName}`);
-      await axios.delete(`/api/write/items/${key}`);
-      this.fetchFiles();
+      try {
+        const currentName = key.split('/').pop();
+        const newName = await this.showInputPrompt("重命名文件", "新名称:", currentName);
+        if (!newName) return;
+        await this.copyPaste(key, `${this.cwd}${newName}`);
+        await axios.delete(`/api/write/items/${key}`);
+        this.fetchFiles();
+      } catch (error) {
+        if (error === null) return; // 用户取消
+        console.error('重命名失败:', error);
+      }
     },
 
     async moveFile(key) {
-      // 获取当前的目录结构
-      const currentPath = this.cwd; // 当前所在目录
-      const allFolders = [...this.folders]; // 所有可用目录
+      try {
+        // 获取当前的目录结构
+        const currentPath = this.cwd; // 当前所在目录
+        const allFolders = [...this.folders]; // 所有可用目录
 
-      // 如果不在根目录，添加返回上级目录选项
-      if (currentPath !== '') {
-        const parentPath = currentPath.replace(/[^\/]+\/$/, '');
-        if (!allFolders.includes(parentPath) && parentPath !== '') {
-          allFolders.unshift(parentPath);
+        // 如果不在根目录，添加返回上级目录选项
+        if (currentPath !== '') {
+          const parentPath = currentPath.replace(/[^\/]+\/$/, '');
+          if (!allFolders.includes(parentPath) && parentPath !== '') {
+            allFolders.unshift(parentPath);
+          }
         }
-      }
 
-      // 添加根目录选项
-      if (!allFolders.includes('')) {
-        allFolders.unshift('');
-      }
+        // 添加根目录选项
+        if (!allFolders.includes('')) {
+          allFolders.unshift('');
+        }
 
-      // 构建选择列表
-      const folderOptions = allFolders.map(folder => {
-        const displayName = folder === '' ? '根目录' :
-          folder === currentPath ? '当前目录' :
-            folder.replace(/.*\/(?!$)|\//g, '') + '/';
-        return {
-          display: displayName,
-          value: folder
-        };
-      });
+        // 构建选择列表
+        const folderOptions = allFolders.map(folder => {
+          const displayName = folder === '' ? '根目录' :
+            folder === currentPath ? '当前目录' :
+              folder.replace(/.*\/(?!$)|\//g, '') + '/';
+          return {
+            display: displayName,
+            value: folder
+          };
+        });
 
-      // 创建选择提示
-      const options = folderOptions.map((opt, index) =>
-        `${index + 1}. ${opt.display}`
-      ).join('\n');
-
-      const promptText = `请选择目标目录(输入数字):\n${options}\n`;
-      const selection = window.prompt(promptText);
-
-      if (!selection) return;
-
-      const selectedIndex = parseInt(selection) - 1;
-      if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= folderOptions.length) {
-        alert('无效的选择');
-        return;
-      }
-
-      const targetPath = folderOptions[selectedIndex].value;
+        // 使用自定义文件夹选择器
+        const targetPath = await this.showFolderSelector('选择目标目录', folderOptions);
+        if (targetPath === null || targetPath === undefined) return; // 用户取消
 
       // 获取文件名
       const fileName = key.split('/').pop();
@@ -1051,6 +1211,7 @@ export default {
         // 刷新文件列表
         this.fetchFiles();
       } catch (error) {
+        if (error === null) return; // 用户取消
         console.error('移动失败:', error);
         alert('移动失败,请检查目标路径是否正确');
       }
