@@ -131,6 +131,21 @@ export async function onRequestPut(context) {
   });
 }
 
+export async function onRequestHead(context) {
+  // HEAD请求用于检查写入权限，不实际执行操作
+  if(!get_auth_status(context)){
+    var header = new Headers()
+    header.set("WWW-Authenticate",'Basic realm="需要登录"')
+    return new Response("没有操作权限", {
+        status: 401,
+        headers: header,
+    });
+   }
+
+  // 如果有权限，返回200状态码
+  return new Response(null, { status: 200 });
+}
+
 export async function onRequestDelete(context) {
   if(!get_auth_status(context)){
     var header = new Headers()

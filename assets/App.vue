@@ -648,6 +648,8 @@ export default {
         headers['Authorization'] = `Basic ${savedCredentials}`;
       }
 
+      console.log('🔄 copyPaste 开始:', { source, target, uploadUrl });
+
       try {
         const response = await fetch(uploadUrl, {
           method: 'PUT',
@@ -655,25 +657,49 @@ export default {
           body: ""
         });
 
+        console.log('🔄 copyPaste 响应:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        });
+
         // 检查响应状态
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
             // 抛出特殊的权限错误，让调用方处理
-            const authError = new Error('需要登录或权限不足');
+            const authError = new Error(`权限不足：无法写入到目标路径 ${target}`);
             authError.isAuthError = true;
             authError.status = response.status;
+            console.log('🔒 copyPaste 权限错误:', authError);
             throw authError;
           }
           // 其他HTTP错误
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          const httpError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+          console.log('❌ copyPaste HTTP错误:', httpError);
+          throw httpError;
         }
+
+        console.log('✅ copyPaste 成功完成');
       } catch (error) {
+        console.log('❌ copyPaste 捕获错误:', error);
+
         // 如果已经是我们的权限错误，直接抛出
         if (error.isAuthError) {
           throw error;
         }
+
+        // 检查是否是网络错误导致的权限问题
+        if (error.message && (error.message.includes('401') || error.message.includes('403'))) {
+          const authError = new Error(`权限不足：无法写入到目标路径 ${target}`);
+          authError.isAuthError = true;
+          authError.originalError = error;
+          throw authError;
+        }
+
         // 网络错误或其他错误
-        throw new Error(`复制粘贴失败: ${error.message}`);
+        const generalError = new Error(`复制粘贴失败: ${error.message}`);
+        generalError.originalError = error;
+        throw generalError;
       }
     },
 
@@ -1617,8 +1643,8 @@ export default {
         return accessibleFolders;
       }
 
-      // 简化的权限检查：只检查读取权限，写入权限在实际操作时验证
-      const checkReadPermission = async (path) => {
+      // 检查写入权限：使用HEAD请求验证权限
+      const checkWritePermission = async (path) => {
         try {
           // 准备请求头
           const headers = {};
@@ -1627,17 +1653,32 @@ export default {
             headers['Authorization'] = `Basic ${savedCredentials}`;
           }
 
-          // 检查读取权限
-          const response = await fetch(`/api/children/${path}`, { headers });
-          const data = await response.json();
+          // 构造一个测试路径
+          const testPath = path === '' ? '_$test_write_permission$' : `${path}_$test_write_permission$`;
+          const response = await fetch(`/api/write/items/${testPath}`, {
+            method: 'HEAD',
+            headers
+          });
 
-          // 如果需要登录或没有权限，返回false
-          if (data.needLogin || response.status === 403) {
+          console.log(`🔍 权限检查 - 路径: ${path}, 测试路径: ${testPath}, 状态: ${response.status}`);
+
+          // 如果返回401或403，说明没有写入权限
+          if (response.status === 401 || response.status === 403) {
+            console.log(`❌ 权限检查失败 - 路径: ${path}, 状态: ${response.status}`);
             return false;
           }
 
-          return true;
+          // 200状态码表示有权限
+          if (response.status === 200) {
+            console.log(`✅ 权限检查通过 - 路径: ${path}`);
+            return true;
+          }
+
+          // 其他状态码认为没有权限
+          console.log(`❓ 权限检查未知状态 - 路径: ${path}, 状态: ${response.status}`);
+          return false;
         } catch (error) {
+          console.log(`❌ 权限检查异常 - 路径: ${path}, 错误:`, error);
           return false;
         }
       };
@@ -1682,14 +1723,14 @@ export default {
         console.error('获取根目录失败:', error);
       }
 
-      // 6. 检查每个目录的权限并构建结果
+      // 6. 检查每个目录的写入权限并构建结果
       for (const path of allPossibleFolders) {
         // 跳过当前目录，因为移动到当前目录没有意义
         if (path === this.cwd) {
           continue;
         }
 
-        if (await checkReadPermission(path)) {
+        if (await checkWritePermission(path)) {
           let displayName;
 
           if (path === '') {

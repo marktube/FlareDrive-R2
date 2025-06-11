@@ -24,6 +24,9 @@ function parseUserAccount(account, context) {
 
 export function get_auth_status(context) {
     var dopath = context.request.url.split("/api/write/items/")[1]
+
+    console.log('get_auth_status - checking write permission for path:', dopath);
+
     const guestEnv = context.env["GUEST"] || context.env["guest"];
     if(guestEnv){
         if(dopath.startsWith("_$flaredrive$/thumbnails/"))return true;
@@ -47,30 +50,45 @@ export function get_auth_status(context) {
     if(!userInfo.exists)return false;
 
     // 只读用户不能进行写操作
-    if(userInfo.isReadOnly) return false;
+    if(userInfo.isReadOnly) {
+        console.log('get_auth_status - read-only user cannot write');
+        return false;
+    }
 
     if(dopath.startsWith("_$flaredrive$/thumbnails/"))return true;
     const allow = userInfo.permissions;
+
+    console.log('get_auth_status - user permissions:', allow);
+    console.log('get_auth_status - checking path:', dopath);
+
     for (var a of allow){
+        console.log('get_auth_status - checking permission:', a, 'against path:', dopath);
         if(a == "*"){
-            return true
+            console.log('get_auth_status - admin access granted');
+            return true;
         }else if(dopath.startsWith(a)){
-            return true
+            console.log('get_auth_status - permission granted for path');
+            return true;
         }
     }
 
     // 检查是否是游客目录 - 已登录用户也应该能访问游客目录
     if(guestEnv){
         const allow_guest = guestEnv.split(",")
+        console.log('get_auth_status - checking guest permissions:', allow_guest);
         for (var aa of allow_guest){
+            console.log('get_auth_status - checking guest permission:', aa, 'against path:', dopath);
             if(aa == "*"){
+                console.log('get_auth_status - guest admin access granted');
                 return true
             }else if(dopath.startsWith(aa)){
+                console.log('get_auth_status - guest permission granted for path');
                 return true
             }
         }
     }
 
+    console.log('get_auth_status - no permission found, access denied');
     return false;
   }
 
