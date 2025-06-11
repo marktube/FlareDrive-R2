@@ -1152,15 +1152,14 @@ export default {
         const targetPath = await this.showFolderSelector('选择目标目录', folderOptions);
         if (targetPath === null || targetPath === undefined) return; // 用户取消
 
-      // 获取文件名
-      const fileName = key.split('/').pop();
-      // 如果是文件夹,需要移除_$folder$后缀
-      const finalFileName = fileName.endsWith('_$folder$') ? fileName.slice(0, -9) : fileName;
+        // 获取文件名
+        const fileName = key.split('/').pop();
+        // 如果是文件夹,需要移除_$folder$后缀
+        const finalFileName = fileName.endsWith('_$folder$') ? fileName.slice(0, -9) : fileName;
 
-      // 修复：正确处理目标路径，避免双斜杠
-      const normalizedPath = targetPath === '' ? '' : (targetPath.endsWith('/') ? targetPath : targetPath + '/');
+        // 修复：正确处理目标路径，避免双斜杠
+        const normalizedPath = targetPath === '' ? '' : (targetPath.endsWith('/') ? targetPath : targetPath + '/');
 
-      try {
         // 如果是目录（以_$folder$结尾），则需要移动整个目录内容
         if (key.endsWith('_$folder$')) {
           // 获取源目录的基础路径（移除_$folder$后缀）
