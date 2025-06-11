@@ -286,10 +286,10 @@
                 <span v-if="file.size" v-text="formatSize(file.size)"></span>
               </div>
             </div>
-            <div style="margin-right: 10px;margin-left: auto;" @click.stop="
-              showContextMenu = true;
-            focusedItem = file;
-            ">
+            <div style="margin-right: 10px;margin-left: auto;"
+                 @click.stop="showContextMenu = true; focusedItem = file;"
+                 @touchstart.stop
+                 @touchend.stop>
               <svg t="1741761103305" class="icon" viewBox="0 0 1024 1024" version="1.1"
                 xmlns="http://www.w3.org/2000/svg" p-id="6484" width="30" height="30">
                 <path
@@ -442,7 +442,7 @@
 
     <!-- 桌面端浮动粘贴按钮 -->
     <div
-      v-if="clipboard && canUpload && !isMobile"
+      v-if="clipboard && !isMobile"
       class="floating-paste-button desktop"
       :class="{ 'auto-hide': !isNearPasteButton }"
       :style="{ left: pasteButtonPosition.x + 'px', top: pasteButtonPosition.y + 'px' }"
@@ -465,8 +465,9 @@
     </div>
 
     <!-- 移动端底部粘贴工具栏 -->
+    <!-- 调试信息：clipboard={{ !!clipboard }}, isMobile={{ isMobile }}, canUpload={{ canUpload }} -->
     <div
-      v-if="clipboard && canUpload && isMobile"
+      v-if="clipboard && isMobile"
       class="mobile-paste-toolbar"
     >
       <div class="paste-toolbar-content" @click="handlePasteButtonClick">
@@ -1253,9 +1254,10 @@ export default {
 
     // 移动端长按进入多选模式
     handleTouchStart(file) {
-      // 记录触摸开始时间
+      // 记录触摸开始时间和位置
       this.touchStartTime = Date.now();
       this.touchedFile = file.key;
+      this.isLongPress = false;
 
       // 如果已经在多选模式，不需要设置长按定时器
       if (this.isMultiSelectMode) return;
@@ -1282,10 +1284,18 @@ export default {
         this.touchTimer = null;
       }
 
+      // 如果是短时间触摸且在多选模式下，不阻止点击
+      const touchDuration = Date.now() - (this.touchStartTime || 0);
+      if (touchDuration < 500 && this.isMultiSelectMode) {
+        // 短按在多选模式下应该正常触发点击
+        this.isLongPress = false;
+        return;
+      }
+
       // 重置长按标记（延迟重置，避免影响点击事件）
       setTimeout(() => {
         this.isLongPress = false;
-      }, 100);
+      }, 50);
     },
 
     isFileSelected(fileKey) {
@@ -2643,11 +2653,35 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 1000;
+  z-index: 10000;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 -4px 20px rgba(102, 126, 234, 0.3);
+  animation: slideUpFromBottom 0.3s ease-out;
+}
+
+@keyframes slideUpFromBottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 当显示移动端粘贴工具栏时，给body添加底部padding */
+body:has(.mobile-paste-toolbar) {
+  padding-bottom: 70px;
+}
+
+/* 兼容不支持:has()的浏览器 */
+@supports not (selector(:has(.mobile-paste-toolbar))) {
+  .mobile-paste-toolbar ~ * {
+    margin-bottom: 70px;
+  }
 }
 
 .paste-toolbar-content {
