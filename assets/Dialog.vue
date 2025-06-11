@@ -13,7 +13,7 @@ const emit = defineEmits(["update:modelValue"]);
       class="dialog-mask"
       @click="emit('update:modelValue', false)"
     >
-      <div class="dialog-container">
+      <div class="dialog-container" @click.stop>
         <slot></slot>
       </div>
     </div>

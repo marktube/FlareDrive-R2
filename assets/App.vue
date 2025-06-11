@@ -136,7 +136,8 @@
           :items="[
             { text: '按照名称排序A-Z' },
             { text: '按照大小递增排序' },
-            { text: '按照大小递减排序' }
+            { text: '按照大小递减排序' },
+            { text: '粘贴文件到此目录', disabled: !clipboard || !canUpload }
           ]"
           @click="onMenuClick" />
         </div>
@@ -1026,6 +1027,9 @@ export default {
         case "按照大小递减排序":
           this.order = "大小↓";
           break;
+        case "粘贴文件到网盘":
+          this.pasteFile();
+          return; // 粘贴操作不需要排序
       }
       this.files.sort((a, b) => {
         if (this.order === "大小↑") {
