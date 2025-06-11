@@ -362,6 +362,7 @@
       @mousedown="startDragPasteButton"
       @touchstart="startDragPasteButton"
       @click="handlePasteButtonClick"
+      @touchend="handleTouchEnd"
     >
       <div class="paste-button-content">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -450,7 +451,9 @@ export default {
     // 浮动粘贴按钮相关
     pasteButtonPosition: { x: 0, y: 0 },
     isDraggingPasteButton: false,
-    dragOffset: { x: 0, y: 0 }
+    dragOffset: { x: 0, y: 0 },
+    dragStartTime: 0,
+    hasMoved: false
   }),
 
   computed: {
@@ -947,22 +950,20 @@ export default {
     // 初始化粘贴按钮位置
     initPasteButtonPosition() {
       if (this.isMobile) {
-        // 移动端：右上角导航栏下方
-        this.pasteButtonPosition.x = window.innerWidth - 70;
-        this.pasteButtonPosition.y = 80; // 导航栏下方
+        // 移动端：右下角，避开返回按钮区域
+        this.pasteButtonPosition.x = window.innerWidth - 80;
+        this.pasteButtonPosition.y = window.innerHeight - 150;
       } else {
-        // 桌面端：右上角导航栏下方
-        this.pasteButtonPosition.x = window.innerWidth - 120;
-        this.pasteButtonPosition.y = 80; // 导航栏下方
+        // 桌面端：左侧中间
+        this.pasteButtonPosition.x = 20;
+        this.pasteButtonPosition.y = window.innerHeight / 2 - 50;
       }
     },
 
     // 浮动粘贴按钮相关方法
     startDragPasteButton(event) {
-      // 延迟设置拖拽状态，避免与点击事件冲突
-      setTimeout(() => {
-        this.isDraggingPasteButton = true;
-      }, 100);
+      this.dragStartTime = Date.now();
+      this.hasMoved = false;
 
       // 支持触摸事件
       const clientX = event.touches ? event.touches[0].clientX : event.clientX;
@@ -976,42 +977,60 @@ export default {
       document.addEventListener('mouseup', this.stopDragPasteButton);
       document.addEventListener('touchmove', this.dragPasteButton);
       document.addEventListener('touchend', this.stopDragPasteButton);
-      event.preventDefault();
-    },
 
-    dragPasteButton(event) {
-      if (this.isDraggingPasteButton) {
-        // 支持触摸事件
-        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-        const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-
-        this.pasteButtonPosition.x = clientX - this.dragOffset.x;
-        this.pasteButtonPosition.y = clientY - this.dragOffset.y;
-
-        // 限制在视窗范围内
-        const buttonWidth = this.isMobile ? 50 : 120;
-        const buttonHeight = this.isMobile ? 50 : 60;
-        this.pasteButtonPosition.x = Math.max(0, Math.min(window.innerWidth - buttonWidth, this.pasteButtonPosition.x));
-        this.pasteButtonPosition.y = Math.max(0, Math.min(window.innerHeight - buttonHeight, this.pasteButtonPosition.y));
+      // 阻止默认行为，但不阻止点击事件
+      if (event.type === 'touchstart') {
+        event.preventDefault();
       }
     },
 
-    stopDragPasteButton() {
-      // 延迟重置拖拽状态，确保点击事件能正确判断
-      setTimeout(() => {
-        this.isDraggingPasteButton = false;
-      }, 50);
+    dragPasteButton(event) {
+      // 标记已移动
+      this.hasMoved = true;
+      this.isDraggingPasteButton = true;
 
+      // 支持触摸事件
+      const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+      const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+      this.pasteButtonPosition.x = clientX - this.dragOffset.x;
+      this.pasteButtonPosition.y = clientY - this.dragOffset.y;
+
+      // 限制在视窗范围内
+      const buttonWidth = this.isMobile ? 50 : 120;
+      const buttonHeight = this.isMobile ? 50 : 60;
+      this.pasteButtonPosition.x = Math.max(0, Math.min(window.innerWidth - buttonWidth, this.pasteButtonPosition.x));
+      this.pasteButtonPosition.y = Math.max(0, Math.min(window.innerHeight - buttonHeight, this.pasteButtonPosition.y));
+
+      event.preventDefault();
+    },
+
+    stopDragPasteButton() {
       // 移除所有事件监听器
       document.removeEventListener('mousemove', this.dragPasteButton);
       document.removeEventListener('mouseup', this.stopDragPasteButton);
       document.removeEventListener('touchmove', this.dragPasteButton);
       document.removeEventListener('touchend', this.stopDragPasteButton);
+
+      // 延迟重置状态
+      setTimeout(() => {
+        this.isDraggingPasteButton = false;
+        this.hasMoved = false;
+      }, 100);
+    },
+
+    handleTouchEnd(event) {
+      // 如果没有移动且时间很短，认为是点击
+      const touchDuration = Date.now() - this.dragStartTime;
+      if (!this.hasMoved && touchDuration < 300) {
+        this.handlePasteButtonClick();
+      }
+      event.preventDefault();
     },
 
     async handlePasteButtonClick() {
-      // 如果正在拖拽，不执行粘贴
-      if (this.isDraggingPasteButton) {
+      // 如果正在拖拽或刚刚移动过，不执行粘贴
+      if (this.isDraggingPasteButton || this.hasMoved) {
         return;
       }
 
