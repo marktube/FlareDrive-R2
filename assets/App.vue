@@ -263,8 +263,6 @@
           <div
             @click="handleFileClick(file)"
             @contextmenu.prevent="showContextMenu = true; focusedItem = file;"
-            @touchstart="handleTouchStart(file)"
-            @touchend="handleTouchEnd"
             class="file-item"
             style="position: relative;"
             :class="{ 'selected': isFileSelected(file.key) }"
@@ -540,8 +538,8 @@
             <span>删除选中文件</span>
           </div>
           <div class="shortcut-item mobile-only">
-            <span class="touch-icon">👆</span>
-            <span>长按文件进入多选</span>
+            <span class="touch-icon">📱</span>
+            <span>点击"多选模式"按钮进入多选</span>
           </div>
         </div>
       </div>
@@ -642,11 +640,6 @@ export default {
     selectedFiles: [], // 选中的文件列表
     isMultiSelectMode: false, // 是否处于多选模式
     showBatchActions: false, // 是否显示批量操作栏
-    // 触摸相关
-    touchStartTime: 0,
-    touchTimer: null,
-    touchedFile: null,
-    isLongPress: false,
     // 粘贴按钮相关
     isNearPasteButton: false
   }),
@@ -749,11 +742,6 @@ export default {
     document.removeEventListener('touchmove', this.dragPasteButton);
     document.removeEventListener('touchend', this.stopDragPasteButton);
     document.removeEventListener('keydown', this.handleKeyDown);
-
-    // 清理触摸定时器
-    if (this.touchTimer) {
-      clearTimeout(this.touchTimer);
-    }
   },
 
   methods: {
@@ -1275,87 +1263,21 @@ export default {
       }
     },
 
-    // 移动端长按进入多选模式
-    handleTouchStart(file) {
-      // 记录触摸开始时间
-      this.touchStartTime = Date.now();
-      this.touchedFile = file.key;
 
-      // 如果已经在多选模式，不需要设置长按定时器，直接允许点击
-      if (this.isMultiSelectMode) {
-        this.isLongPress = false;
-        return;
-      }
-
-      // 重置长按标记
-      this.isLongPress = false;
-
-      // 设置长按定时器
-      this.touchTimer = setTimeout(() => {
-        // 长按500ms进入多选模式
-        this.isMultiSelectMode = true;
-        this.toggleFileSelection(file.key);
-        // 触觉反馈（如果支持）
-        if (navigator.vibrate) {
-          navigator.vibrate(50);
-        }
-        this.showCustomToast('已进入多选模式', 'success', 1500);
-        // 标记为长按，避免触发点击
-        this.isLongPress = true;
-      }, 500);
-    },
-
-    handleTouchEnd() {
-      const touchDuration = Date.now() - (this.touchStartTime || 0);
-
-      // 清理长按定时器
-      if (this.touchTimer) {
-        clearTimeout(this.touchTimer);
-        this.touchTimer = null;
-      }
-
-      // 在多选模式下，任何触摸都应该允许点击
-      if (this.isMultiSelectMode) {
-        this.isLongPress = false;
-        return;
-      }
-
-      // 非多选模式下，短按不应该被标记为长按
-      if (touchDuration < 500) {
-        this.isLongPress = false;
-      }
-
-      // 延迟重置长按标记（仅在非多选模式下）
-      setTimeout(() => {
-        if (!this.isMultiSelectMode) {
-          this.isLongPress = false;
-        }
-      }, 50);
-    },
 
     isFileSelected(fileKey) {
       return this.selectedFiles.includes(fileKey);
     },
 
     toggleFileSelection(fileKey) {
-      console.log('🔄 toggleFileSelection:', {
-        fileKey,
-        currentSelected: this.selectedFiles.length,
-        isSelected: this.selectedFiles.includes(fileKey)
-      });
-
       const index = this.selectedFiles.indexOf(fileKey);
       if (index > -1) {
         // 文件已选中，取消选择
         this.selectedFiles.splice(index, 1);
-        console.log('➖ 取消选择文件:', fileKey);
       } else {
         // 文件未选中，添加到选择列表
         this.selectedFiles.push(fileKey);
-        console.log('➕ 选择文件:', fileKey);
       }
-
-      console.log('📊 当前选中文件数:', this.selectedFiles.length);
     },
 
     selectAllFiles() {
@@ -1759,23 +1681,9 @@ export default {
 
     // 处理文件点击（区分搜索结果和普通文件）
     handleFileClick(file) {
-      console.log('🖱️ handleFileClick:', {
-        file: file.key,
-        isMultiSelectMode: this.isMultiSelectMode,
-        isLongPress: this.isLongPress,
-        isMobile: this.isMobile
-      });
-
       // 如果处于多选模式，点击文件切换选择状态
       if (this.isMultiSelectMode) {
-        console.log('🔄 多选模式：切换文件选择状态');
         this.toggleFileSelection(file.key);
-        return;
-      }
-
-      // 如果是长按触发的，忽略点击事件（仅在非多选模式下）
-      if (this.isLongPress) {
-        console.log('⏸️ 长按标记：忽略点击事件');
         return;
       }
 
