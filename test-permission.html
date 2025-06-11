@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>权限检查测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .result { margin: 10px 0; padding: 10px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        button { padding: 10px 15px; margin: 5px; }
+        input { padding: 5px; margin: 5px; width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>权限检查测试工具</h1>
+    
+    <div class="test-section">
+        <h3>1. 登录测试</h3>
+        <input type="text" id="username" placeholder="用户名" value="letvar">
+        <input type="password" id="password" placeholder="密码" value="666">
+        <button onclick="testLogin()">测试登录</button>
+        <div id="loginResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. 权限检查测试</h3>
+        <input type="text" id="testPath" placeholder="测试路径" value="">
+        <button onclick="testPermission()">检查写入权限</button>
+        <div id="permissionResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. 批量权限检查</h3>
+        <button onclick="testMultiplePaths()">检查多个路径权限</button>
+        <div id="multipleResult" class="result"></div>
+    </div>
+
+    <script>
+        let authCredentials = null;
+
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                authCredentials = btoa(`${username}:${password}`);
+                
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Basic ${authCredentials}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 登录成功<br>用户: ${result.user.username}<br>权限: ${result.user.permissions.join(', ')}<br>只读: ${result.user.isReadOnly}`;
+                    localStorage.setItem('authCredentials', authCredentials);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                    authCredentials = null;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+                authCredentials = null;
+            }
+        }
+
+        async function testPermission() {
+            const path = document.getElementById('testPath').value;
+            const resultDiv = document.getElementById('permissionResult');
+            
+            if (!authCredentials) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '❌ 请先登录';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/auth/check-write-permission', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Basic ${authCredentials}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ path })
+                });
+                
+                const result = await response.json();
+                
+                if (result.hasPermission) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 路径 "${path}" 有写入权限`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 路径 "${path}" 无写入权限`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 检查异常: ${error.message}`;
+            }
+        }
+
+        async function testMultiplePaths() {
+            const resultDiv = document.getElementById('multipleResult');
+            
+            if (!authCredentials) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '❌ 请先登录';
+                return;
+            }
+            
+            const testPaths = ['', 'test/', 'public/', 'private/', 'docs/'];
+            let results = [];
+            
+            resultDiv.innerHTML = '🔄 正在检查多个路径权限...';
+            
+            for (const path of testPaths) {
+                try {
+                    const response = await fetch('/api/auth/check-write-permission', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Basic ${authCredentials}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ path })
+                    });
+                    
+                    const result = await response.json();
+                    const displayPath = path === '' ? '根目录' : path;
+                    const status = result.hasPermission ? '✅ 有权限' : '❌ 无权限';
+                    results.push(`${displayPath}: ${status}`);
+                } catch (error) {
+                    const displayPath = path === '' ? '根目录' : path;
+                    results.push(`${displayPath}: ❌ 检查失败 (${error.message})`);
+                }
+            }
+            
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = '<h4>权限检查结果:</h4>' + results.map(r => `<div>${r}</div>`).join('');
+        }
+
+        // 页面加载时尝试从localStorage恢复登录状态
+        window.onload = function() {
+            const saved = localStorage.getItem('authCredentials');
+            if (saved) {
+                authCredentials = saved;
+                document.getElementById('loginResult').innerHTML = '🔄 已从缓存恢复登录状态';
+            }
+        };
+    </script>
+</body>
+</html>

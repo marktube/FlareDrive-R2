@@ -1643,40 +1643,35 @@ export default {
         return accessibleFolders;
       }
 
-      // 检查写入权限：使用HEAD请求验证权限
+      // 检查写入权限：使用专门的权限检查API
       const checkWritePermission = async (path) => {
         try {
           // 准备请求头
-          const headers = {};
+          const headers = {
+            'Content-Type': 'application/json'
+          };
           const savedCredentials = localStorage.getItem('authCredentials');
           if (savedCredentials) {
             headers['Authorization'] = `Basic ${savedCredentials}`;
           }
 
-          // 构造一个测试路径
-          const testPath = path === '' ? '_$test_write_permission$' : `${path}_$test_write_permission$`;
-          const response = await fetch(`/api/write/items/${testPath}`, {
-            method: 'HEAD',
-            headers
+          const response = await fetch('/api/auth/check-write-permission', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ path })
           });
 
-          console.log(`🔍 权限检查 - 路径: ${path}, 测试路径: ${testPath}, 状态: ${response.status}`);
+          const result = await response.json();
 
-          // 如果返回401或403，说明没有写入权限
-          if (response.status === 401 || response.status === 403) {
-            console.log(`❌ 权限检查失败 - 路径: ${path}, 状态: ${response.status}`);
-            return false;
-          }
+          console.log(`🔍 权限检查 - 路径: ${path}, 结果:`, result);
 
-          // 200状态码表示有权限
-          if (response.status === 200) {
+          if (result.hasPermission) {
             console.log(`✅ 权限检查通过 - 路径: ${path}`);
             return true;
+          } else {
+            console.log(`❌ 权限检查失败 - 路径: ${path}`);
+            return false;
           }
-
-          // 其他状态码认为没有权限
-          console.log(`❓ 权限检查未知状态 - 路径: ${path}, 状态: ${response.status}`);
-          return false;
         } catch (error) {
           console.log(`❌ 权限检查异常 - 路径: ${path}, 错误:`, error);
           return false;
