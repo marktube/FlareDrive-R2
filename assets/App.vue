@@ -155,8 +155,21 @@
         </div>
       </div>
 
+      <!-- 文件操作工具栏 -->
+      <div v-if="!needLogin && (filteredFiles.length > 0 || isMultiSelectMode)" class="file-toolbar">
+        <div class="toolbar-left">
+          <button v-if="!isMultiSelectMode" @click="toggleMultiSelectMode" class="toolbar-btn primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12l2 2 4-4"/>
+              <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.09 0 2.13.2 3.1.56"/>
+            </svg>
+            多选模式
+          </button>
+        </div>
+      </div>
+
       <!-- 多选工具栏 -->
-      <div v-if="isMultiSelectMode || selectedFiles.length > 0" class="multi-select-toolbar">
+      <div v-if="isMultiSelectMode" class="multi-select-toolbar">
         <div class="toolbar-left">
           <button @click="toggleMultiSelectMode" class="toolbar-btn">
             {{ isMultiSelectMode ? '退出多选' : '多选模式' }}
@@ -247,12 +260,18 @@
           </div>
         </li>
         <li v-for="file in filteredFiles" :key="file.key">
-          <div @click="handleFileClick(file)" @contextmenu.prevent="
-            showContextMenu = true;
-          focusedItem = file;" class="file-item" style="position: relative;" :class="{ 'selected': isFileSelected(file.key) }">
+          <div
+            @click="handleFileClick(file)"
+            @contextmenu.prevent="showContextMenu = true; focusedItem = file;"
+            @touchstart="handleTouchStart(file, $event)"
+            @touchend="handleTouchEnd(file, $event)"
+            class="file-item"
+            style="position: relative;"
+            :class="{ 'selected': isFileSelected(file.key) }"
+          >
             <!-- 多选复选框 -->
             <div v-if="isMultiSelectMode" class="file-checkbox" @click.stop="toggleFileSelection(file.key)">
-              <input type="checkbox" :checked="isFileSelected(file.key)" @change="toggleFileSelection(file.key)">
+              <input type="checkbox" :checked="isFileSelected(file.key)" @click.stop @change.stop="toggleFileSelection(file.key)">
             </div>
             <MimeIcon :content-type="file.httpMetadata?.contentType || 'application/octet-stream'" :thumbnail="file.customMetadata?.thumbnail
               ? `/raw/_$flaredrive$/thumbnails/${file.customMetadata.thumbnail}.png`
@@ -440,7 +459,7 @@
         <span v-if="!isMobile">粘贴</span>
       </div>
       <div class="paste-file-info" v-if="!isMobile">
-        {{ clipboard.split('/').pop() }}
+        {{ Array.isArray(clipboard) ? `${clipboard.length} 个文件` : clipboard.split('/').pop() }}
       </div>
     </div>
 
@@ -560,7 +579,10 @@ export default {
     // 多选功能相关
     selectedFiles: [], // 选中的文件列表
     isMultiSelectMode: false, // 是否处于多选模式
-    showBatchActions: false // 是否显示批量操作栏
+    showBatchActions: false, // 是否显示批量操作栏
+    // 触摸相关
+    touchStartTime: 0,
+    touchTimer: null
   }),
 
   computed: {
@@ -645,6 +667,11 @@ export default {
     document.removeEventListener('touchmove', this.dragPasteButton);
     document.removeEventListener('touchend', this.stopDragPasteButton);
     document.removeEventListener('keydown', this.handleKeyDown);
+
+    // 清理触摸定时器
+    if (this.touchTimer) {
+      clearTimeout(this.touchTimer);
+    }
   },
 
   methods: {
@@ -1158,6 +1185,37 @@ export default {
       }
     },
 
+    // 移动端长按进入多选模式
+    handleTouchStart(file) {
+      if (this.isMultiSelectMode) return;
+
+      this.touchStartTime = Date.now();
+      this.touchTimer = setTimeout(() => {
+        // 长按500ms进入多选模式
+        this.isMultiSelectMode = true;
+        this.toggleFileSelection(file.key);
+        // 触觉反馈（如果支持）
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+        this.showCustomToast('已进入多选模式', 'success', 1500);
+      }, 500);
+    },
+
+    handleTouchEnd(file, event) {
+      if (this.touchTimer) {
+        clearTimeout(this.touchTimer);
+        this.touchTimer = null;
+      }
+
+      // 如果是短按且在多选模式下，切换选择状态
+      const touchDuration = Date.now() - (this.touchStartTime || 0);
+      if (touchDuration < 500 && this.isMultiSelectMode) {
+        event.preventDefault();
+        this.toggleFileSelection(file.key);
+      }
+    },
+
     isFileSelected(fileKey) {
       return this.selectedFiles.includes(fileKey);
     },
@@ -1205,8 +1263,8 @@ export default {
     batchCopy() {
       if (this.selectedFiles.length === 0) return;
 
-      // 将第一个文件设为剪贴板内容，其他文件可以通过扩展功能支持
-      this.clipboard = this.selectedFiles[0];
+      // 支持多文件复制
+      this.clipboard = this.selectedFiles.length === 1 ? this.selectedFiles[0] : this.selectedFiles;
       this.showCustomToast(`已复制 ${this.selectedFiles.length} 个文件到剪贴板`, 'success');
     },
 
@@ -1225,13 +1283,13 @@ export default {
         }
 
         // 显示目录选择对话框
-        const targetPath = await this.showFolderSelector({
-          title: `移动 ${this.selectedFiles.length} 个文件`,
-          folders: accessibleFolders.map(folder => ({
+        const targetPath = await this.showFolderSelector(
+          `移动 ${this.selectedFiles.length} 个文件`,
+          accessibleFolders.map(folder => ({
             value: folder.path,
             display: folder.displayName
           }))
-        });
+        );
 
         if (targetPath === null) return; // 用户取消
 
@@ -1627,15 +1685,53 @@ export default {
 
     async pasteFile() {
       if (!this.clipboard) return;
+
       try {
-        const defaultName = this.clipboard.split("/").pop();
-        let newName = await this.showInputPrompt("粘贴文件", "重命名为:", defaultName);
-        if (newName === null || newName === undefined) return;
-        if (newName === "") newName = defaultName;
-        await this.copyPaste(this.clipboard, `${this.cwd}${newName}`);
-        this.fetchFiles();
+        // 检查是否是多文件粘贴
+        if (Array.isArray(this.clipboard)) {
+          // 多文件粘贴
+          const confirmed = await this.showConfirmPrompt(
+            '批量粘贴文件',
+            `确定要粘贴 ${this.clipboard.length} 个文件到当前目录吗？`,
+            { confirmText: '粘贴', cancelText: '取消' }
+          );
+
+          if (!confirmed) return;
+
+          let successCount = 0;
+          let failCount = 0;
+
+          for (const sourceFile of this.clipboard) {
+            try {
+              const fileName = sourceFile.split('/').pop();
+              const targetFile = `${this.cwd}${fileName}`;
+              await this.copyPaste(sourceFile, targetFile);
+              successCount++;
+            } catch (error) {
+              console.error(`粘贴文件 ${sourceFile} 失败:`, error);
+              failCount++;
+            }
+          }
+
+          this.fetchFiles();
+
+          if (failCount === 0) {
+            this.showCustomToast(`成功粘贴 ${successCount} 个文件`, 'success');
+          } else {
+            this.showCustomToast(`粘贴完成：成功 ${successCount} 个，失败 ${failCount} 个`, 'warning');
+          }
+        } else {
+          // 单文件粘贴
+          const defaultName = this.clipboard.split("/").pop();
+          let newName = await this.showInputPrompt("粘贴文件", "重命名为:", defaultName);
+          if (newName === null || newName === undefined) return;
+          if (newName === "") newName = defaultName;
+          await this.copyPaste(this.clipboard, `${this.cwd}${newName}`);
+          this.fetchFiles();
+          this.showCustomToast('文件粘贴成功', 'success');
+        }
       } catch (error) {
-        if (error === null) return; // 用户取消
+        if (error === null || error === false) return; // 用户取消
 
         // 检查是否是权限错误
         if (error.isAuthError) {
@@ -2514,6 +2610,29 @@ export default {
   }
 }
 
+/* 文件操作工具栏样式 */
+.file-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.file-toolbar .toolbar-btn.primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.file-toolbar .toolbar-btn.primary:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-1px);
+}
+
 /* 多选功能样式 */
 .multi-select-toolbar {
   display: flex;
@@ -2580,6 +2699,13 @@ export default {
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.file-checkbox:hover {
+  background-color: rgba(102, 126, 234, 0.1);
 }
 
 .file-checkbox input[type="checkbox"] {
@@ -2587,6 +2713,7 @@ export default {
   height: 18px;
   cursor: pointer;
   accent-color: #667eea;
+  margin: 0;
 }
 
 .file-item.selected {
