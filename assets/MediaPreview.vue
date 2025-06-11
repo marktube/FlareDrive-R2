@@ -316,7 +316,7 @@ export default {
       if (!currentMedia) return 0;
 
       return this.filteredMediaList.findIndex(media => media.key === currentMedia.key);
-    }
+    },
     imageStyle() {
       return {
         transform: `scale(${this.scale}) rotate(${this.rotation}deg) translate(${this.translateX}px, ${this.translateY}px)`,
