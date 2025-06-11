@@ -1488,12 +1488,29 @@ export default {
             headers['Authorization'] = `Basic ${savedCredentials}`;
           }
 
-          // 尝试访问目录
+          // 首先检查读取权限
           const response = await fetch(`/api/children/${path}`, { headers });
           const data = await response.json();
 
           // 如果需要登录或没有权限，返回false
-          return !data.needLogin && response.status !== 403;
+          if (data.needLogin || response.status === 403) {
+            return false;
+          }
+
+          // 然后检查写入权限：尝试访问写入API端点
+          const writeCheckUrl = `/api/write/items/${path}test_permission_check`;
+          const writeResponse = await fetch(writeCheckUrl, {
+            method: 'HEAD', // 使用HEAD请求，不会实际创建文件
+            headers: headers
+          });
+
+          // 如果写入端点返回401或403，说明没有写入权限
+          if (writeResponse.status === 401 || writeResponse.status === 403) {
+            return false;
+          }
+
+          // 如果HEAD请求成功或返回404（文件不存在但有权限），说明有写入权限
+          return writeResponse.status !== 401 && writeResponse.status !== 403;
         } catch (error) {
           return false;
         }
@@ -1505,12 +1522,7 @@ export default {
       // 1. 添加根目录
       allPossibleFolders.add('');
 
-      // 2. 添加当前目录（如果不是根目录）
-      if (this.cwd !== '') {
-        allPossibleFolders.add(this.cwd);
-      }
-
-      // 3. 添加上级目录
+      // 2. 添加上级目录
       if (this.cwd !== '') {
         const parentPath = this.cwd.replace(/[^\/]+\/$/, '');
         allPossibleFolders.add(parentPath);
@@ -1546,13 +1558,16 @@ export default {
 
       // 6. 检查每个目录的权限并构建结果
       for (const path of allPossibleFolders) {
+        // 跳过当前目录，因为移动到当前目录没有意义
+        if (path === this.cwd) {
+          continue;
+        }
+
         if (await checkWritePermission(path)) {
           let displayName;
 
           if (path === '') {
             displayName = '根目录';
-          } else if (path === this.cwd) {
-            displayName = '当前目录';
           } else if (this.cwd !== '' && path === this.cwd.replace(/[^\/]+\/$/, '')) {
             const parentDisplayName = path === '' ? '根目录' :
               path.replace(/.*\/(?!$)|\//g, '') + '/';
@@ -1573,12 +1588,10 @@ export default {
         index === self.findIndex(f => f.path === folder.path)
       );
 
-      // 排序：根目录 -> 当前目录 -> 上级目录 -> 其他目录
+      // 排序：根目录 -> 上级目录 -> 其他目录
       uniqueFolders.sort((a, b) => {
         if (a.path === '') return -1;
         if (b.path === '') return 1;
-        if (a.path === this.cwd) return -1;
-        if (b.path === this.cwd) return 1;
         if (a.displayName.includes('上级目录')) return -1;
         if (b.displayName.includes('上级目录')) return 1;
         return a.displayName.localeCompare(b.displayName);
