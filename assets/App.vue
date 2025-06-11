@@ -376,6 +376,27 @@
       </div>
     </div>
 
+    <!-- 自定义提示组件 -->
+    <div v-if="showToast" class="custom-toast" :class="toastType">
+      <div class="toast-content">
+        <svg v-if="toastType === 'success'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 12l2 2 4-4"/>
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+        <svg v-else-if="toastType === 'error'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="15" y1="9" x2="9" y2="15"/>
+          <line x1="9" y1="9" x2="15" y2="15"/>
+        </svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>{{ toastMessage }}</span>
+      </div>
+    </div>
+
     <div style="flex:1"></div>
     <Footer />
   </div>
@@ -453,7 +474,11 @@ export default {
     isDraggingPasteButton: false,
     dragOffset: { x: 0, y: 0 },
     dragStartTime: 0,
-    hasMoved: false
+    hasMoved: false,
+    // 自定义提示相关
+    showToast: false,
+    toastMessage: '',
+    toastType: 'success' // 'success', 'error', 'warning'
   }),
 
   computed: {
@@ -1259,6 +1284,17 @@ export default {
       }
     },
 
+    // 显示自定义提示
+    showCustomToast(message, type = 'success', duration = 3000) {
+      this.toastMessage = message;
+      this.toastType = type;
+      this.showToast = true;
+
+      setTimeout(() => {
+        this.showToast = false;
+      }, duration);
+    },
+
     // 显示权限对话框
     showPermissionDialog(operation = '粘贴文件') {
       const message = this.isLoggedIn
@@ -1468,10 +1504,25 @@ export default {
           // 单文件移动逻辑，修复根目录的情况
           const targetFilePath = normalizedPath + finalFileName;
 
+          console.log('🔍 移动文件调试信息:');
+          console.log('- 源文件:', key);
+          console.log('- 目标路径:', targetPath);
+          console.log('- 目标文件路径:', targetFilePath);
+          console.log('- 标准化路径:', normalizedPath);
+
           try {
+            console.log('📤 开始复制文件...');
             await this.copyPaste(key, targetFilePath);
+            console.log('✅ 复制成功，开始删除原文件...');
             await this.deleteFile(key);
+            console.log('✅ 删除成功，移动完成');
           } catch (moveError) {
+            console.error('❌ 移动过程中出错:', moveError);
+            console.log('- 错误类型:', typeof moveError);
+            console.log('- 是否权限错误:', moveError.isAuthError);
+            console.log('- 错误消息:', moveError.message);
+            console.log('- 完整错误对象:', moveError);
+
             // 如果是权限错误，重新抛出以便外层catch处理
             if (moveError.isAuthError) {
               throw moveError;
@@ -1490,7 +1541,7 @@ export default {
         const targetDisplayName = targetPath === '' ? '根目录' :
           targetPath.replace(/.*\/(?!$)|\//g, '') + '/';
         const displayFileName = finalFileName; // 使用之前已经处理过的文件名
-        alert(`文件 "${displayFileName}" 已成功移动到 ${targetDisplayName}`);
+        this.showCustomToast(`文件 "${displayFileName}" 已成功移动到 ${targetDisplayName}`, 'success');
       } catch (error) {
         if (error === null) return; // 用户取消
 
@@ -1505,7 +1556,7 @@ export default {
         // 根据目标路径给出更具体的错误提示
         const targetDisplayName = targetPath === '' ? '根目录' :
           targetPath.replace(/.*\/(?!$)|\//g, '') + '/';
-        alert(`移动文件到 ${targetDisplayName} 失败：您可能没有该目录的写入权限，或者目标路径不正确。`);
+        this.showCustomToast(`移动文件到 ${targetDisplayName} 失败：您可能没有该目录的写入权限，或者目标路径不正确。`, 'error', 5000);
       }
     },
 
@@ -1978,6 +2029,71 @@ export default {
 
   .floating-paste-button .paste-file-info {
     display: none; /* 隐藏文件信息 */
+  }
+}
+
+/* 自定义提示样式 */
+.custom-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 500px;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slideInRight 0.3s ease-out;
+}
+
+.custom-toast.success {
+  background: #f0f9ff;
+  border-left: 4px solid #10b981;
+  color: #065f46;
+}
+
+.custom-toast.error {
+  background: #fef2f2;
+  border-left: 4px solid #ef4444;
+  color: #991b1b;
+}
+
+.custom-toast.warning {
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  color: #92400e;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.toast-content svg {
+  flex-shrink: 0;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* 移动端提示样式 */
+@media (max-width: 768px) {
+  .custom-toast {
+    left: 20px;
+    right: 20px;
+    min-width: auto;
+    max-width: none;
   }
 }
 </style>
