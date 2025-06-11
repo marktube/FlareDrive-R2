@@ -1412,11 +1412,16 @@ export default {
     async moveFile(key) {
       let targetPath = null; // 声明在外层作用域，以便错误处理时使用
 
+      console.log('🚀 开始移动文件:', key);
+
       try {
         // 获取用户有权限的目录列表
+        console.log('📋 获取可访问目录列表...');
         const accessibleFolders = await this.getAccessibleFolders();
+        console.log('📋 可访问目录:', accessibleFolders);
 
         if (accessibleFolders.length === 0) {
+          console.log('❌ 没有可访问的目录');
           alert('没有可用的目标目录，您可能没有足够的权限');
           return;
         }
@@ -1431,21 +1436,30 @@ export default {
             value: folder.path
           };
         });
+        console.log('📋 目录选择列表:', folderOptions);
 
         // 使用自定义文件夹选择器
+        console.log('📂 显示目录选择对话框...');
         targetPath = await this.showFolderSelector('选择目标目录', folderOptions);
-        if (targetPath === null || targetPath === undefined) return; // 用户取消
+        console.log('📂 用户选择的目标路径:', targetPath);
+        if (targetPath === null || targetPath === undefined) {
+          console.log('❌ 用户取消了操作');
+          return; // 用户取消
+        }
 
         // 获取文件名
         const fileName = key.split('/').pop();
         // 如果是文件夹,需要移除_$folder$后缀
         const finalFileName = fileName.endsWith('_$folder$') ? fileName.slice(0, -9) : fileName;
+        console.log('📄 文件信息:', { fileName, finalFileName, isFolder: key.endsWith('_$folder$') });
 
         // 修复：正确处理目标路径，避免双斜杠
         const normalizedPath = targetPath === '' ? '' : (targetPath.endsWith('/') ? targetPath : targetPath + '/');
+        console.log('📁 路径信息:', { targetPath, normalizedPath });
 
         // 如果是目录（以_$folder$结尾），则需要移动整个目录内容
         if (key.endsWith('_$folder$')) {
+          console.log('📁 检测到目录移动，开始处理目录内容...');
           // 获取源目录的基础路径（移除_$folder$后缀）
           const sourceBasePath = key.slice(0, -9);
           // 获取目标目录的基础路径，修复根目录的情况
@@ -1543,19 +1557,31 @@ export default {
         const displayFileName = finalFileName; // 使用之前已经处理过的文件名
         this.showCustomToast(`文件 "${displayFileName}" 已成功移动到 ${targetDisplayName}`, 'success');
       } catch (error) {
-        if (error === null) return; // 用户取消
+        console.log('❌ 移动文件过程中捕获到错误:', error);
+        console.log('- 错误类型:', typeof error);
+        console.log('- 错误值:', error);
+        console.log('- 是否为null:', error === null);
+        console.log('- 是否权限错误:', error && error.isAuthError);
+        console.log('- 目标路径:', targetPath);
+
+        if (error === null) {
+          console.log('✅ 用户取消操作');
+          return; // 用户取消
+        }
 
         // 检查是否是权限错误
         if (error.isAuthError) {
+          console.log('🔒 检测到权限错误，显示权限对话框');
           this.showPermissionDialog('移动文件');
           return;
         }
 
-        console.error('移动失败:', error);
+        console.error('❌ 移动失败:', error);
 
         // 根据目标路径给出更具体的错误提示
         const targetDisplayName = targetPath === '' ? '根目录' :
           targetPath.replace(/.*\/(?!$)|\//g, '') + '/';
+        console.log('📢 显示错误提示:', targetDisplayName);
         this.showCustomToast(`移动文件到 ${targetDisplayName} 失败：您可能没有该目录的写入权限，或者目标路径不正确。`, 'error', 5000);
       }
     },
