@@ -620,7 +620,20 @@ export default {
         headers['Authorization'] = `Basic ${savedCredentials}`;
       }
 
-      await axios.put(uploadUrl, "", { headers });
+      try {
+        await axios.put(uploadUrl, "", { headers });
+      } catch (error) {
+        // 检查是否是权限问题
+        if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+          // 抛出特殊的权限错误，让调用方处理
+          const authError = new Error('需要登录或权限不足');
+          authError.isAuthError = true;
+          authError.originalError = error;
+          throw authError;
+        }
+        // 其他错误直接抛出
+        throw error;
+      }
     },
 
     async createFolder() {
@@ -1178,7 +1191,31 @@ export default {
         this.fetchFiles();
       } catch (error) {
         if (error === null) return; // 用户取消
+
+        // 检查是否是权限错误
+        if (error.isAuthError) {
+          // 显示友好的权限提示，并提供登录选项
+          this.showPermissionDialog();
+          return;
+        }
+
         console.error('粘贴文件失败:', error);
+        alert('粘贴文件失败: ' + (error.message || '未知错误'));
+      }
+    },
+
+    // 显示权限对话框
+    showPermissionDialog(operation = '粘贴文件') {
+      const message = this.isLoggedIn
+        ? `您没有权限在此目录${operation}。可能需要更高级别的权限或者此目录为只读。`
+        : `您需要登录才能在此目录${operation}。`;
+
+      const action = this.isLoggedIn ? '确定' : '立即登录';
+
+      if (confirm(`${message}\n\n点击"${action}"${this.isLoggedIn ? '' : '进行身份验证'}`)) {
+        if (!this.isLoggedIn) {
+          this.showLoginModal();
+        }
       }
     },
 
@@ -1259,37 +1296,36 @@ export default {
         this.fetchFiles();
       } catch (error) {
         if (error === null) return; // 用户取消
+
+        // 检查是否是权限错误
+        if (error.isAuthError) {
+          this.showPermissionDialog('重命名文件');
+          return;
+        }
+
         console.error('重命名失败:', error);
+        alert('重命名失败: ' + (error.message || '未知错误'));
       }
     },
 
     async moveFile(key) {
       try {
-        // 获取当前的目录结构
-        const currentPath = this.cwd; // 当前所在目录
-        const allFolders = [...this.folders]; // 所有可用目录
+        // 获取用户有权限的目录列表
+        const accessibleFolders = await this.getAccessibleFolders();
 
-        // 如果不在根目录，添加返回上级目录选项
-        if (currentPath !== '') {
-          const parentPath = currentPath.replace(/[^\/]+\/$/, '');
-          if (!allFolders.includes(parentPath) && parentPath !== '') {
-            allFolders.unshift(parentPath);
-          }
-        }
-
-        // 添加根目录选项
-        if (!allFolders.includes('')) {
-          allFolders.unshift('');
+        if (accessibleFolders.length === 0) {
+          alert('没有可用的目标目录，您可能没有足够的权限');
+          return;
         }
 
         // 构建选择列表
-        const folderOptions = allFolders.map(folder => {
-          const displayName = folder === '' ? '根目录' :
-            folder === currentPath ? '当前目录' :
-              folder.replace(/.*\/(?!$)|\//g, '') + '/';
+        const folderOptions = accessibleFolders.map(folder => {
+          const displayName = folder.path === '' ? '根目录' :
+            folder.path === this.cwd ? '当前目录' :
+              folder.displayName;
           return {
             display: displayName,
-            value: folder
+            value: folder.path
           };
         });
 
@@ -1356,9 +1392,105 @@ export default {
         this.fetchFiles();
       } catch (error) {
         if (error === null) return; // 用户取消
+
+        // 检查是否是权限错误
+        if (error.isAuthError) {
+          this.showPermissionDialog('移动文件');
+          return;
+        }
+
         console.error('移动失败:', error);
         alert('移动失败,请检查目标路径是否正确');
       }
+    },
+
+    // 获取用户有权限访问的目录列表
+    async getAccessibleFolders() {
+      const accessibleFolders = [];
+
+      // 如果是只读用户，直接返回空列表
+      if (this.isReadOnlyUser) {
+        return accessibleFolders;
+      }
+
+      // 检查目录是否有写入权限的简化版本
+      const checkWritePermission = async (path) => {
+        try {
+          // 准备请求头
+          const headers = {};
+          const savedCredentials = localStorage.getItem('authCredentials');
+          if (savedCredentials) {
+            headers['Authorization'] = `Basic ${savedCredentials}`;
+          }
+
+          // 尝试访问目录
+          const response = await fetch(`/api/children/${path}`, { headers });
+          const data = await response.json();
+
+          // 如果需要登录或没有权限，返回false
+          return !data.needLogin && response.status !== 403;
+        } catch (error) {
+          return false;
+        }
+      };
+
+      // 构建候选目录列表
+      const candidateFolders = [];
+
+      // 1. 添加根目录
+      candidateFolders.push({ path: '', displayName: '根目录' });
+
+      // 2. 添加当前目录（如果不是根目录）
+      if (this.cwd !== '') {
+        candidateFolders.push({ path: this.cwd, displayName: '当前目录' });
+      }
+
+      // 3. 添加上级目录
+      if (this.cwd !== '') {
+        const parentPath = this.cwd.replace(/[^\/]+\/$/, '');
+        const parentDisplayName = parentPath === '' ? '根目录' :
+          parentPath.replace(/.*\/(?!$)|\//g, '') + '/';
+        candidateFolders.push({
+          path: parentPath,
+          displayName: `上级目录 (${parentDisplayName})`
+        });
+      }
+
+      // 4. 添加当前目录下的子目录
+      if (this.folders && this.folders.length > 0) {
+        for (const folder of this.folders) {
+          const displayName = folder.replace(/.*\/(?!$)|\//g, '') + '/';
+          candidateFolders.push({
+            path: folder,
+            displayName: displayName
+          });
+        }
+      }
+
+      // 5. 检查每个候选目录的权限
+      for (const folder of candidateFolders) {
+        if (await checkWritePermission(folder.path)) {
+          accessibleFolders.push(folder);
+        }
+      }
+
+      // 去重
+      const uniqueFolders = accessibleFolders.filter((folder, index, self) =>
+        index === self.findIndex(f => f.path === folder.path)
+      );
+
+      // 排序：根目录 -> 当前目录 -> 上级目录 -> 其他目录
+      uniqueFolders.sort((a, b) => {
+        if (a.path === '') return -1;
+        if (b.path === '') return 1;
+        if (a.path === this.cwd) return -1;
+        if (b.path === this.cwd) return 1;
+        if (a.displayName.includes('上级目录')) return -1;
+        if (b.displayName.includes('上级目录')) return 1;
+        return a.displayName.localeCompare(b.displayName);
+      });
+
+      return uniqueFolders;
     },
 
     // 新增：递归获取目录下所有文件和子目录
