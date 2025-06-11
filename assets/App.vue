@@ -156,9 +156,9 @@
       </div>
 
       <!-- 文件操作工具栏 -->
-      <div v-if="!needLogin && (filteredFiles.length > 0 || isMultiSelectMode)" class="file-toolbar">
+      <div v-if="!needLogin && !isMultiSelectMode && filteredFiles.length > 0" class="file-toolbar">
         <div class="toolbar-left">
-          <button v-if="!isMultiSelectMode" @click="toggleMultiSelectMode" class="toolbar-btn primary">
+          <button @click="toggleMultiSelectMode" class="toolbar-btn primary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 12l2 2 4-4"/>
               <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.09 0 2.13.2 3.1.56"/>
@@ -263,8 +263,8 @@
           <div
             @click="handleFileClick(file)"
             @contextmenu.prevent="showContextMenu = true; focusedItem = file;"
-            @touchstart="handleTouchStart(file, $event)"
-            @touchend="handleTouchEnd(file, $event)"
+            @touchstart="handleTouchStart(file)"
+            @touchend="handleTouchEnd"
             class="file-item"
             style="position: relative;"
             :class="{ 'selected': isFileSelected(file.key) }"
@@ -440,26 +440,51 @@
       </div>
     </Dialog>
 
-    <!-- 浮动粘贴按钮 -->
+    <!-- 桌面端浮动粘贴按钮 -->
     <div
-      v-if="clipboard && canUpload"
-      class="floating-paste-button"
-      :class="{ 'mobile': isMobile }"
+      v-if="clipboard && canUpload && !isMobile"
+      class="floating-paste-button desktop"
+      :class="{ 'auto-hide': !isNearPasteButton }"
       :style="{ left: pasteButtonPosition.x + 'px', top: pasteButtonPosition.y + 'px' }"
       @mousedown="startDragPasteButton"
-      @touchstart="startDragPasteButton"
       @click="handlePasteButtonClick"
-      @touchend="handleTouchEnd"
+      @mouseenter="isNearPasteButton = true"
+      @mouseleave="isNearPasteButton = false"
     >
       <div class="paste-button-content">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
         </svg>
-        <span v-if="!isMobile">粘贴</span>
+        <span>粘贴</span>
+        <kbd class="shortcut-hint">Ctrl+V</kbd>
       </div>
-      <div class="paste-file-info" v-if="!isMobile">
+      <div class="paste-file-info">
         {{ Array.isArray(clipboard) ? `${clipboard.length} 个文件` : clipboard.split('/').pop() }}
+      </div>
+    </div>
+
+    <!-- 移动端底部粘贴工具栏 -->
+    <div
+      v-if="clipboard && canUpload && isMobile"
+      class="mobile-paste-toolbar"
+    >
+      <div class="paste-toolbar-content" @click="handlePasteButtonClick">
+        <div class="paste-info">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+          </svg>
+          <span class="paste-text">
+            粘贴 {{ Array.isArray(clipboard) ? `${clipboard.length} 个文件` : clipboard.split('/').pop() }}
+          </span>
+        </div>
+        <button class="paste-close-btn" @click.stop="clipboard = null">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -485,6 +510,43 @@
     </div>
 
     <div style="flex:1"></div>
+
+    <!-- 快捷键说明 -->
+    <div v-if="!needLogin" class="keyboard-shortcuts">
+      <div class="shortcuts-container">
+        <h4 class="shortcuts-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          快捷键
+        </h4>
+        <div class="shortcuts-grid">
+          <div class="shortcut-item">
+            <kbd>Ctrl</kbd> + <kbd>A</kbd>
+            <span>切换多选模式</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>Ctrl</kbd> + <kbd>V</kbd>
+            <span>粘贴文件</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>ESC</kbd>
+            <span>退出多选模式</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>Delete</kbd>
+            <span>删除选中文件</span>
+          </div>
+          <div class="shortcut-item mobile-only">
+            <span class="touch-icon">👆</span>
+            <span>长按文件进入多选</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <Footer />
   </div>
 </template>
@@ -582,7 +644,11 @@ export default {
     showBatchActions: false, // 是否显示批量操作栏
     // 触摸相关
     touchStartTime: 0,
-    touchTimer: null
+    touchTimer: null,
+    touchedFile: null,
+    isLongPress: false,
+    // 粘贴按钮相关
+    isNearPasteButton: false
   }),
 
   computed: {
@@ -1187,9 +1253,14 @@ export default {
 
     // 移动端长按进入多选模式
     handleTouchStart(file) {
+      // 记录触摸开始时间
+      this.touchStartTime = Date.now();
+      this.touchedFile = file.key;
+
+      // 如果已经在多选模式，不需要设置长按定时器
       if (this.isMultiSelectMode) return;
 
-      this.touchStartTime = Date.now();
+      // 设置长按定时器
       this.touchTimer = setTimeout(() => {
         // 长按500ms进入多选模式
         this.isMultiSelectMode = true;
@@ -1199,21 +1270,22 @@ export default {
           navigator.vibrate(50);
         }
         this.showCustomToast('已进入多选模式', 'success', 1500);
+        // 标记为长按，避免触发点击
+        this.isLongPress = true;
       }, 500);
     },
 
-    handleTouchEnd(file, event) {
+    handleTouchEnd() {
+      // 清理长按定时器
       if (this.touchTimer) {
         clearTimeout(this.touchTimer);
         this.touchTimer = null;
       }
 
-      // 如果是短按且在多选模式下，切换选择状态
-      const touchDuration = Date.now() - (this.touchStartTime || 0);
-      if (touchDuration < 500 && this.isMultiSelectMode) {
-        event.preventDefault();
-        this.toggleFileSelection(file.key);
-      }
+      // 重置长按标记（延迟重置，避免影响点击事件）
+      setTimeout(() => {
+        this.isLongPress = false;
+      }, 100);
     },
 
     isFileSelected(fileKey) {
@@ -1388,6 +1460,13 @@ export default {
         return;
       }
 
+      // Ctrl+V 或 Cmd+V：粘贴文件
+      if ((event.ctrlKey || event.metaKey) && event.key === 'v' && !event.target.matches('input, textarea') && this.clipboard) {
+        event.preventDefault();
+        this.pasteFile();
+        return;
+      }
+
       // Escape：退出多选模式
       if (event.key === 'Escape' && this.isMultiSelectMode) {
         this.isMultiSelectMode = false;
@@ -1459,15 +1538,11 @@ export default {
 
     // 初始化粘贴按钮位置
     initPasteButtonPosition() {
-      if (this.isMobile) {
-        // 移动端：右下角，避开返回按钮区域
-        this.pasteButtonPosition.x = window.innerWidth - 80;
-        this.pasteButtonPosition.y = window.innerHeight - 150;
-      } else {
-        // 桌面端：左侧中间
-        this.pasteButtonPosition.x = 20;
-        this.pasteButtonPosition.y = window.innerHeight / 2 - 50;
-      }
+      // 桌面端智能定位：右侧边缘，避开文件列表
+      this.pasteButtonPosition = {
+        x: window.innerWidth - 240,
+        y: 120
+      };
     },
 
     // 浮动粘贴按钮相关方法
@@ -1522,11 +1597,35 @@ export default {
       document.removeEventListener('touchmove', this.dragPasteButton);
       document.removeEventListener('touchend', this.stopDragPasteButton);
 
+      // 桌面端智能吸附到边缘
+      if (!this.isMobile && this.hasMoved) {
+        this.snapToEdge();
+      }
+
       // 延迟重置状态
       setTimeout(() => {
         this.isDraggingPasteButton = false;
         this.hasMoved = false;
       }, 100);
+    },
+
+    // 拖拽结束后的智能吸附
+    snapToEdge() {
+      const windowWidth = window.innerWidth;
+      const buttonWidth = 220;
+      const margin = 20;
+
+      // 吸附到最近的边缘
+      if (this.pasteButtonPosition.x < windowWidth / 2) {
+        // 吸附到左边
+        this.pasteButtonPosition.x = margin;
+      } else {
+        // 吸附到右边
+        this.pasteButtonPosition.x = windowWidth - buttonWidth - margin;
+      }
+
+      // 确保不超出屏幕边界
+      this.pasteButtonPosition.y = Math.max(80, Math.min(this.pasteButtonPosition.y, window.innerHeight - 100));
     },
 
     handleTouchEnd(event) {
@@ -1591,6 +1690,11 @@ export default {
 
     // 处理文件点击（区分搜索结果和普通文件）
     handleFileClick(file) {
+      // 如果是长按触发的，忽略点击事件
+      if (this.isLongPress) {
+        return;
+      }
+
       // 如果处于多选模式，点击文件切换选择状态
       if (this.isMultiSelectMode) {
         this.toggleFileSelection(file.key);
@@ -2463,87 +2567,231 @@ export default {
   right: 0;
 }
 
-/* 浮动粘贴按钮样式 */
-.floating-paste-button {
+/* 桌面端浮动粘贴按钮样式 */
+.floating-paste-button.desktop {
   position: fixed;
   z-index: 1000;
-  background: #007bff;
-  color: white;
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: move;
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
-  user-select: none;
-  min-width: 100px;
-  max-width: 200px;
-  transition: all 0.2s ease;
-  touch-action: none; /* 防止触摸时的默认行为 */
-}
-
-.floating-paste-button:hover {
-  background: #0056b3;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 123, 255, 0.4);
-}
-
-.floating-paste-button:active {
-  transform: translateY(0);
-}
-
-/* 移动端样式 */
-.floating-paste-button.mobile {
-  min-width: 50px;
-  max-width: 50px;
-  padding: 12px;
-  border-radius: 50%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 12px 16px;
+  cursor: move;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+  user-select: none;
+  min-width: 200px;
+  max-width: 220px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.floating-paste-button.mobile .paste-button-content {
-  justify-content: center;
+.floating-paste-button.desktop:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
 }
 
-.paste-button-content {
+.floating-paste-button.desktop:active {
+  transform: translateY(-1px);
+}
+
+/* 半透明效果 */
+.floating-paste-button.desktop.auto-hide {
+  opacity: 0.6;
+  transform: scale(0.95);
+}
+
+.floating-paste-button.desktop.auto-hide:hover {
+  opacity: 1;
+  transform: scale(1) translateY(-3px);
+}
+
+/* 桌面端粘贴按钮内容 */
+.floating-paste-button.desktop .paste-button-content {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 14px;
   font-weight: 500;
+  margin-bottom: 4px;
 }
 
-.paste-file-info {
+.floating-paste-button.desktop .paste-file-info {
   font-size: 11px;
-  opacity: 0.8;
-  margin-top: 2px;
+  opacity: 0.9;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.shortcut-hint {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: normal;
+  margin-left: auto;
+}
+
+/* 移动端底部粘贴工具栏 */
+.mobile-paste-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 -4px 20px rgba(102, 126, 234, 0.3);
+}
+
+.paste-toolbar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  color: white;
+  cursor: pointer;
+}
+
+.paste-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.paste-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.paste-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.paste-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+/* 快捷键说明样式 */
+.keyboard-shortcuts {
+  margin: 20px auto 10px;
+  padding: 0 20px;
+  max-width: 1200px;
+}
+
+.shortcuts-container {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.shortcuts-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 16px;
+  font-size: 13px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  color: #6b7280;
+}
+
+.shortcut-item kbd {
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  min-width: 24px;
+  text-align: center;
+}
+
+.touch-icon {
+  font-size: 16px;
+  min-width: 24px;
+  text-align: center;
 }
 
 /* 移动端优化 */
 @media (max-width: 768px) {
-  .floating-paste-button {
-    min-width: 50px;
-    max-width: 50px;
-    padding: 12px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  .keyboard-shortcuts {
+    margin: 15px 10px 5px;
+    padding: 0;
   }
 
-  .floating-paste-button .paste-button-content {
-    justify-content: center;
-    font-size: 0; /* 隐藏文字 */
+  .shortcuts-container {
+    padding: 12px 16px;
   }
 
-  .floating-paste-button .paste-button-content span {
-    display: none; /* 隐藏"粘贴"文字 */
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 
-  .floating-paste-button .paste-file-info {
-    display: none; /* 隐藏文件信息 */
+  .shortcut-item {
+    font-size: 12px;
+  }
+
+  .shortcuts-title {
+    font-size: 13px;
+  }
+
+  /* 在移动端隐藏桌面端快捷键，显示触摸提示 */
+  .shortcut-item:not(.mobile-only) {
+    display: none;
+  }
+
+  .mobile-only {
+    display: flex !important;
   }
 }
+
+/* 桌面端隐藏移动端专用提示 */
+@media (min-width: 769px) {
+  .mobile-only {
+    display: none;
+  }
+}
+
+
 
 /* 自定义提示样式 */
 .custom-toast {
