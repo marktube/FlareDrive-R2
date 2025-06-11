@@ -348,7 +348,7 @@
           </a>
         </li>
         <li>
-          <button @click="clipboard = focusedItem.key">
+          <button @click="copyFile(focusedItem.key)">
             <span>复制</span>
           </button>
         </li>
@@ -830,6 +830,14 @@ export default {
       navigator.clipboard.writeText(url.toString());
     },
 
+    // 复制单个文件到剪贴板
+    copyFile(fileKey) {
+      this.clipboard = fileKey;
+      this.showCustomToast('文件已复制到剪贴板', 'success');
+      // 关闭右键菜单
+      this.showContextMenu = false;
+    },
+
     async copyPaste(source, target) {
       const uploadUrl = `/api/write/items/${target}`;
 
@@ -1272,12 +1280,15 @@ export default {
       // 记录触摸开始时间
       this.touchStartTime = Date.now();
       this.touchedFile = file.key;
-      this.isLongPress = false;
 
-      // 如果已经在多选模式，不需要设置长按定时器
+      // 如果已经在多选模式，不需要设置长按定时器，直接允许点击
       if (this.isMultiSelectMode) {
+        this.isLongPress = false;
         return;
       }
+
+      // 重置长按标记
+      this.isLongPress = false;
 
       // 设置长按定时器
       this.touchTimer = setTimeout(() => {
@@ -1303,16 +1314,23 @@ export default {
         this.touchTimer = null;
       }
 
-      // 在多选模式下，短按不应该被标记为长按
-      if (this.isMultiSelectMode && touchDuration < 500) {
+      // 在多选模式下，任何触摸都应该允许点击
+      if (this.isMultiSelectMode) {
         this.isLongPress = false;
         return;
       }
 
-      // 延迟重置长按标记
-      setTimeout(() => {
+      // 非多选模式下，短按不应该被标记为长按
+      if (touchDuration < 500) {
         this.isLongPress = false;
-      }, 100);
+      }
+
+      // 延迟重置长按标记（仅在非多选模式下）
+      setTimeout(() => {
+        if (!this.isMultiSelectMode) {
+          this.isLongPress = false;
+        }
+      }, 50);
     },
 
     isFileSelected(fileKey) {
@@ -1320,12 +1338,24 @@ export default {
     },
 
     toggleFileSelection(fileKey) {
+      console.log('🔄 toggleFileSelection:', {
+        fileKey,
+        currentSelected: this.selectedFiles.length,
+        isSelected: this.selectedFiles.includes(fileKey)
+      });
+
       const index = this.selectedFiles.indexOf(fileKey);
       if (index > -1) {
+        // 文件已选中，取消选择
         this.selectedFiles.splice(index, 1);
+        console.log('➖ 取消选择文件:', fileKey);
       } else {
+        // 文件未选中，添加到选择列表
         this.selectedFiles.push(fileKey);
+        console.log('➕ 选择文件:', fileKey);
       }
+
+      console.log('📊 当前选中文件数:', this.selectedFiles.length);
     },
 
     selectAllFiles() {
@@ -1729,15 +1759,23 @@ export default {
 
     // 处理文件点击（区分搜索结果和普通文件）
     handleFileClick(file) {
+      console.log('🖱️ handleFileClick:', {
+        file: file.key,
+        isMultiSelectMode: this.isMultiSelectMode,
+        isLongPress: this.isLongPress,
+        isMobile: this.isMobile
+      });
+
       // 如果处于多选模式，点击文件切换选择状态
       if (this.isMultiSelectMode) {
-        // 在多选模式下，总是切换选择状态，不管是否长按
+        console.log('🔄 多选模式：切换文件选择状态');
         this.toggleFileSelection(file.key);
         return;
       }
 
       // 如果是长按触发的，忽略点击事件（仅在非多选模式下）
       if (this.isLongPress) {
+        console.log('⏸️ 长按标记：忽略点击事件');
         return;
       }
 
