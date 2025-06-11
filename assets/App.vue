@@ -1436,27 +1436,61 @@ export default {
               // 更新进度
               processedItems++;
               this.uploadProgress = (processedItems / totalItems) * 100;
-            } catch (error) {
-              console.error(`移动 ${item.key} 失败:`, error);
+            } catch (itemError) {
+              console.error(`移动 ${item.key} 失败:`, itemError);
+              // 如果是权限错误，停止整个操作并抛出错误
+              if (itemError.isAuthError) {
+                throw itemError;
+              }
+              // 其他错误记录但继续处理其他文件
             }
           }
 
           // 移动目录标记
           const targetFolderPath = targetBasePath.slice(0, -1) + '_$folder$';
-          await this.copyPaste(key, targetFolderPath);
-          await this.deleteFile(key);
+          try {
+            await this.copyPaste(key, targetFolderPath);
+            await this.deleteFile(key);
+          } catch (folderError) {
+            // 如果是权限错误，重新抛出
+            if (folderError.isAuthError) {
+              throw folderError;
+            }
+            // 其他错误也抛出
+            const error = new Error(`移动目录标记失败: ${folderError.message || folderError}`);
+            error.originalError = folderError;
+            throw error;
+          }
 
           // 清除进度
           this.uploadProgress = null;
         } else {
           // 单文件移动逻辑，修复根目录的情况
           const targetFilePath = normalizedPath + finalFileName;
-          await this.copyPaste(key, targetFilePath);
-          await this.deleteFile(key);
+
+          try {
+            await this.copyPaste(key, targetFilePath);
+            await this.deleteFile(key);
+          } catch (moveError) {
+            // 如果是权限错误，重新抛出以便外层catch处理
+            if (moveError.isAuthError) {
+              throw moveError;
+            }
+            // 其他错误也抛出，但添加更多上下文
+            const error = new Error(`移动文件失败: ${moveError.message || moveError}`);
+            error.originalError = moveError;
+            throw error;
+          }
         }
 
         // 刷新文件列表
         this.fetchFiles();
+
+        // 显示成功提示
+        const targetDisplayName = targetPath === '' ? '根目录' :
+          targetPath.replace(/.*\/(?!$)|\//g, '') + '/';
+        const displayFileName = finalFileName; // 使用之前已经处理过的文件名
+        alert(`文件 "${displayFileName}" 已成功移动到 ${targetDisplayName}`);
       } catch (error) {
         if (error === null) return; // 用户取消
 
