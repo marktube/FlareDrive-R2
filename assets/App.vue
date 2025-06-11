@@ -155,8 +155,59 @@
         </div>
       </div>
 
+      <!-- 多选工具栏 -->
+      <div v-if="isMultiSelectMode || selectedFiles.length > 0" class="multi-select-toolbar">
+        <div class="toolbar-left">
+          <button @click="toggleMultiSelectMode" class="toolbar-btn">
+            {{ isMultiSelectMode ? '退出多选' : '多选模式' }}
+          </button>
+          <span v-if="selectedFiles.length > 0" class="selected-count">
+            已选择 {{ selectedFiles.length }} 个文件
+          </span>
+          <button v-if="selectedFiles.length > 0" @click="selectAllFiles" class="toolbar-btn">
+            {{ selectedFiles.length === filteredFiles.length ? '取消全选' : '全选' }}
+          </button>
+        </div>
+        <div v-if="selectedFiles.length > 0" class="toolbar-right">
+          <button @click="batchDownload" class="toolbar-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7,10 12,15 17,10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            下载
+          </button>
+          <button @click="batchCopy" class="toolbar-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            复制
+          </button>
+          <button @click="batchMove" class="toolbar-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14,2 14,8 20,8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <line x1="10" y1="9" x2="8" y2="9"/>
+            </svg>
+            移动
+          </button>
+          <button @click="batchDelete" class="toolbar-btn danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3,6 5,6 21,6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <line x1="10" y1="11" x2="10" y2="17"/>
+              <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+            删除
+          </button>
+        </div>
+      </div>
+
       <!-- 文件列表 -->
-      <ul v-else class="file-list">
+      <ul v-if="!needLogin" class="file-list">
         <li v-if="cwd !== ''">
           <div tabindex="0" class="file-item" @click="cwd = cwd.replace(/[^\/]+\/$/, '')" @contextmenu.prevent>
             <div class="file-icon">
@@ -198,7 +249,11 @@
         <li v-for="file in filteredFiles" :key="file.key">
           <div @click="handleFileClick(file)" @contextmenu.prevent="
             showContextMenu = true;
-          focusedItem = file;" class="file-item" style="position: relative;">
+          focusedItem = file;" class="file-item" style="position: relative;" :class="{ 'selected': isFileSelected(file.key) }">
+            <!-- 多选复选框 -->
+            <div v-if="isMultiSelectMode" class="file-checkbox" @click.stop="toggleFileSelection(file.key)">
+              <input type="checkbox" :checked="isFileSelected(file.key)" @change="toggleFileSelection(file.key)">
+            </div>
             <MimeIcon :content-type="file.httpMetadata?.contentType || 'application/octet-stream'" :thumbnail="file.customMetadata?.thumbnail
               ? `/raw/_$flaredrive$/thumbnails/${file.customMetadata.thumbnail}.png`
               : null
@@ -307,6 +362,7 @@
       :mediaList="previewMediaList"
       :initialIndex="previewInitialIndex"
       @close="closeMediaPreview"
+      @show-toast="showCustomToast"
     />
 
     <!-- 自定义输入对话框 -->
@@ -349,6 +405,18 @@
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
           <button @click="cancelFolderSelection" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px;">取消</button>
           <button @click="confirmFolderSelection" :disabled="!folderDialog.selectedFolder" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; opacity: folderDialog.selectedFolder ? 1 : 0.5;">确定</button>
+        </div>
+      </div>
+    </Dialog>
+
+    <!-- 自定义确认对话框 -->
+    <Dialog v-model="showConfirmDialog">
+      <div style="padding: 20px;">
+        <h3 v-text="confirmDialog.title" style="margin: 0 0 15px 0;"></h3>
+        <p v-text="confirmDialog.message" style="margin: 0 0 20px 0; line-height: 1.5;"></p>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button @click="cancelConfirm" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px;">{{ confirmDialog.cancelText || '取消' }}</button>
+          <button @click="confirmAction" :style="`padding: 8px 16px; background: ${confirmDialog.type === 'danger' ? '#dc3545' : '#007bff'}; color: white; border: none; border-radius: 4px;`">{{ confirmDialog.confirmText || '确定' }}</button>
         </div>
       </div>
     </Dialog>
@@ -469,6 +537,16 @@ export default {
       resolve: null,
       reject: null
     },
+    showConfirmDialog: false,
+    confirmDialog: {
+      title: '',
+      message: '',
+      type: 'default', // 'default', 'danger'
+      confirmText: '',
+      cancelText: '',
+      resolve: null,
+      reject: null
+    },
     // 浮动粘贴按钮相关
     pasteButtonPosition: { x: 0, y: 0 },
     isDraggingPasteButton: false,
@@ -478,7 +556,11 @@ export default {
     // 自定义提示相关
     showToast: false,
     toastMessage: '',
-    toastType: 'success' // 'success', 'error', 'warning'
+    toastType: 'success', // 'success', 'error', 'warning'
+    // 多选功能相关
+    selectedFiles: [], // 选中的文件列表
+    isMultiSelectMode: false, // 是否处于多选模式
+    showBatchActions: false // 是否显示批量操作栏
   }),
 
   computed: {
@@ -551,6 +633,9 @@ export default {
     }
     this.fetchFiles();
     this.initPasteButtonPosition();
+
+    // 添加键盘快捷键监听
+    document.addEventListener('keydown', this.handleKeyDown);
   },
 
   beforeUnmount() {
@@ -559,6 +644,7 @@ export default {
     document.removeEventListener('mouseup', this.stopDragPasteButton);
     document.removeEventListener('touchmove', this.dragPasteButton);
     document.removeEventListener('touchend', this.stopDragPasteButton);
+    document.removeEventListener('keydown', this.handleKeyDown);
   },
 
   methods: {
@@ -1034,6 +1120,231 @@ export default {
       this.showInputDialog = false;
     },
 
+    // 自定义确认对话框
+    showConfirmPrompt(title, message, options = {}) {
+      return new Promise((resolve, reject) => {
+        this.confirmDialog = {
+          title,
+          message,
+          type: options.type || 'default',
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          resolve,
+          reject
+        };
+        this.showConfirmDialog = true;
+      });
+    },
+
+    confirmAction() {
+      if (this.confirmDialog.resolve) {
+        this.confirmDialog.resolve(true);
+      }
+      this.showConfirmDialog = false;
+    },
+
+    cancelConfirm() {
+      if (this.confirmDialog.reject) {
+        this.confirmDialog.reject(false);
+      }
+      this.showConfirmDialog = false;
+    },
+
+    // 多选功能相关方法
+    toggleMultiSelectMode() {
+      this.isMultiSelectMode = !this.isMultiSelectMode;
+      if (!this.isMultiSelectMode) {
+        this.selectedFiles = [];
+      }
+    },
+
+    isFileSelected(fileKey) {
+      return this.selectedFiles.includes(fileKey);
+    },
+
+    toggleFileSelection(fileKey) {
+      const index = this.selectedFiles.indexOf(fileKey);
+      if (index > -1) {
+        this.selectedFiles.splice(index, 1);
+      } else {
+        this.selectedFiles.push(fileKey);
+      }
+    },
+
+    selectAllFiles() {
+      if (this.selectedFiles.length === this.filteredFiles.length) {
+        // 取消全选
+        this.selectedFiles = [];
+      } else {
+        // 全选
+        this.selectedFiles = this.filteredFiles.map(file => file.key);
+      }
+    },
+
+    // 批量操作方法
+    async batchDownload() {
+      if (this.selectedFiles.length === 0) return;
+
+      try {
+        for (const fileKey of this.selectedFiles) {
+          const link = document.createElement('a');
+          link.href = `/raw/${fileKey}`;
+          link.download = fileKey.split('/').pop();
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          // 添加小延迟避免浏览器阻止多个下载
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        this.showCustomToast(`开始下载 ${this.selectedFiles.length} 个文件`, 'success');
+      } catch (error) {
+        this.showCustomToast('批量下载失败: ' + error.message, 'error');
+      }
+    },
+
+    batchCopy() {
+      if (this.selectedFiles.length === 0) return;
+
+      // 将第一个文件设为剪贴板内容，其他文件可以通过扩展功能支持
+      this.clipboard = this.selectedFiles[0];
+      this.showCustomToast(`已复制 ${this.selectedFiles.length} 个文件到剪贴板`, 'success');
+    },
+
+    async batchMove() {
+      if (this.selectedFiles.length === 0) return;
+
+      try {
+        console.log('🚀 开始批量移动文件:', this.selectedFiles);
+
+        // 获取可访问的目录列表
+        const accessibleFolders = await this.getAccessibleFolders();
+
+        if (accessibleFolders.length === 0) {
+          this.showCustomToast('没有可用的目标目录，您可能没有足够的权限', 'error');
+          return;
+        }
+
+        // 显示目录选择对话框
+        const targetPath = await this.showFolderSelector({
+          title: `移动 ${this.selectedFiles.length} 个文件`,
+          folders: accessibleFolders.map(folder => ({
+            value: folder.path,
+            display: folder.displayName
+          }))
+        });
+
+        if (targetPath === null) return; // 用户取消
+
+        // 批量移动文件
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const sourceFile of this.selectedFiles) {
+          try {
+            const fileName = sourceFile.split('/').pop();
+            const targetFile = targetPath === '' ? fileName : `${targetPath}${fileName}`;
+
+            await this.copyPaste(sourceFile, targetFile);
+            await this.deleteFile(sourceFile);
+            successCount++;
+          } catch (error) {
+            console.error(`移动文件 ${sourceFile} 失败:`, error);
+            failCount++;
+          }
+        }
+
+        // 清空选择并刷新文件列表
+        this.selectedFiles = [];
+        this.fetchFiles();
+
+        if (failCount === 0) {
+          this.showCustomToast(`成功移动 ${successCount} 个文件`, 'success');
+        } else {
+          this.showCustomToast(`移动完成：成功 ${successCount} 个，失败 ${failCount} 个`, 'warning');
+        }
+
+      } catch (error) {
+        console.error('批量移动失败:', error);
+        if (error.isAuthError) {
+          this.showPermissionDialog('移动文件');
+        } else {
+          this.showCustomToast('批量移动失败: ' + (error.message || '未知错误'), 'error');
+        }
+      }
+    },
+
+    async batchDelete() {
+      if (this.selectedFiles.length === 0) return;
+
+      try {
+        const fileNames = this.selectedFiles.map(key => key.split('/').pop()).join('、');
+        const confirmed = await this.showConfirmPrompt(
+          '批量删除文件',
+          `确定要删除以下 ${this.selectedFiles.length} 个文件吗？\n\n${fileNames}\n\n此操作无法撤销。`,
+          { type: 'danger', confirmText: '删除', cancelText: '取消' }
+        );
+
+        if (!confirmed) return;
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const fileKey of this.selectedFiles) {
+          try {
+            await this.deleteFile(fileKey);
+            successCount++;
+          } catch (error) {
+            console.error(`删除文件 ${fileKey} 失败:`, error);
+            failCount++;
+          }
+        }
+
+        // 清空选择并刷新文件列表
+        this.selectedFiles = [];
+        this.fetchFiles();
+
+        if (failCount === 0) {
+          this.showCustomToast(`成功删除 ${successCount} 个文件`, 'success');
+        } else {
+          this.showCustomToast(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`, 'warning');
+        }
+
+      } catch (error) {
+        if (error === false) return; // 用户取消
+
+        console.error('批量删除失败:', error);
+        if (error.isAuthError) {
+          this.showPermissionDialog('删除文件');
+        } else {
+          this.showCustomToast('批量删除失败: ' + (error.message || '未知错误'), 'error');
+        }
+      }
+    },
+
+    // 键盘快捷键处理
+    handleKeyDown(event) {
+      // Ctrl+A 或 Cmd+A：切换多选模式
+      if ((event.ctrlKey || event.metaKey) && event.key === 'a' && !event.target.matches('input, textarea')) {
+        event.preventDefault();
+        this.toggleMultiSelectMode();
+        return;
+      }
+
+      // Escape：退出多选模式
+      if (event.key === 'Escape' && this.isMultiSelectMode) {
+        this.isMultiSelectMode = false;
+        this.selectedFiles = [];
+        return;
+      }
+
+      // Delete：删除选中的文件
+      if (event.key === 'Delete' && this.selectedFiles.length > 0) {
+        event.preventDefault();
+        this.batchDelete();
+        return;
+      }
+    },
+
     // 自定义文件夹选择对话框
     showFolderSelector(title, folders) {
       console.log('📂 showFolderSelector 被调用:', { title, folders });
@@ -1179,7 +1490,7 @@ export default {
         await this.pasteFile();
       } catch (error) {
         console.error('粘贴文件失败:', error);
-        alert('粘贴文件失败: ' + (error.message || error));
+        this.showCustomToast('粘贴文件失败: ' + (error.message || error), 'error');
       }
     },
 
@@ -1222,6 +1533,12 @@ export default {
 
     // 处理文件点击（区分搜索结果和普通文件）
     handleFileClick(file) {
+      // 如果处于多选模式，点击文件切换选择状态
+      if (this.isMultiSelectMode) {
+        this.toggleFileSelection(file.key);
+        return;
+      }
+
       // 检查是否是媒体文件
       const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
       const videoTypes = ['mp4', 'webm', 'ogv', 'avi', 'mov', 'wmv'];
@@ -1328,7 +1645,7 @@ export default {
         }
 
         console.error('粘贴文件失败:', error);
-        alert('粘贴文件失败: ' + (error.message || '未知错误'));
+        this.showCustomToast('粘贴文件失败: ' + (error.message || '未知错误'), 'error');
       }
     },
 
@@ -1351,11 +1668,17 @@ export default {
 
       const action = this.isLoggedIn ? '确定' : '立即登录';
 
-      if (confirm(`${message}\n\n点击"${action}"${this.isLoggedIn ? '' : '进行身份验证'}`)) {
-        if (!this.isLoggedIn) {
+      this.showConfirmPrompt(
+        '权限提示',
+        `${message}\n\n点击"${action}"${this.isLoggedIn ? '' : '进行身份验证'}`,
+        { confirmText: action, cancelText: '取消' }
+      ).then((confirmed) => {
+        if (confirmed && !this.isLoggedIn) {
           this.showLoginModal();
         }
-      }
+      }).catch(() => {
+        // 用户取消，不做任何操作
+      });
     },
 
     async processUploadQueue() {
@@ -1420,18 +1743,28 @@ export default {
     },
 
     async removeFile(key) {
-      if (!window.confirm(`确定要删除 ${key} 吗？`)) return;
       try {
+        const fileName = key.split('/').pop();
+        const confirmed = await this.showConfirmPrompt(
+          '删除文件',
+          `确定要删除文件 "${fileName}" 吗？此操作无法撤销。`,
+          { type: 'danger', confirmText: '删除', cancelText: '取消' }
+        );
+        if (!confirmed) return;
+
         await this.deleteFile(key);
         this.fetchFiles();
+        this.showCustomToast(`文件 "${fileName}" 已删除`, 'success');
       } catch (error) {
+        if (error === false) return; // 用户取消
+
         // 检查是否是权限错误
         if (error.isAuthError) {
           this.showPermissionDialog('删除文件');
           return;
         }
         console.error('删除失败:', error);
-        alert('删除失败: ' + (error.message || '未知错误'));
+        this.showCustomToast('删除失败: ' + (error.message || '未知错误'), 'error');
       }
     },
 
@@ -1453,7 +1786,7 @@ export default {
         }
 
         console.error('重命名失败:', error);
-        alert('重命名失败: ' + (error.message || '未知错误'));
+        this.showCustomToast('重命名失败: ' + (error.message || '未知错误'), 'error');
       }
     },
 
@@ -1470,7 +1803,7 @@ export default {
 
         if (accessibleFolders.length === 0) {
           console.log('❌ 没有可访问的目录');
-          alert('没有可用的目标目录，您可能没有足够的权限');
+          this.showCustomToast('没有可用的目标目录，您可能没有足够的权限', 'error');
           return;
         }
 
@@ -2178,6 +2511,135 @@ export default {
     right: 20px;
     min-width: auto;
     max-width: none;
+  }
+}
+
+/* 多选功能样式 */
+.multi-select-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  color: white;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.toolbar-btn.danger {
+  background: rgba(239, 68, 68, 0.8);
+  border-color: rgba(239, 68, 68, 0.9);
+}
+
+.toolbar-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.9);
+}
+
+.selected-count {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+/* 文件选择样式 */
+.file-checkbox {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+}
+
+.file-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #667eea;
+}
+
+.file-item.selected {
+  background: rgba(102, 126, 234, 0.1);
+  border-left: 4px solid #667eea;
+}
+
+.file-item {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+/* 多选模式下文件项的左边距调整 */
+.file-item {
+  padding-left: 8px;
+  transition: padding-left 0.2s ease;
+}
+
+/* 当存在复选框时增加左边距 */
+.file-item:has(.file-checkbox) {
+  padding-left: 40px;
+}
+
+/* 兼容不支持:has()的浏览器 */
+@supports not (selector(:has(.file-checkbox))) {
+  .file-item .file-checkbox ~ * {
+    margin-left: 32px;
+  }
+}
+
+/* 移动端多选工具栏优化 */
+@media (max-width: 768px) {
+  .multi-select-toolbar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .toolbar-btn {
+    flex: 1;
+    justify-content: center;
+    min-width: 80px;
+  }
+
+  .selected-count {
+    text-align: center;
+    width: 100%;
   }
 }
 </style>

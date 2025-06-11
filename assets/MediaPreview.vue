@@ -475,19 +475,19 @@ export default {
     copyShareLink() {
       const url = new URL(this.currentMedia.url, window.location.origin);
       navigator.clipboard.writeText(url.toString()).then(() => {
-        alert('链接已复制到剪贴板');
+        this.$emit('show-toast', '链接已复制到剪贴板', 'success');
         this.showShareModal = false;
       });
     },
-    
+
     shareToWechat() {
       // 微信分享逻辑（需要微信SDK）
-      alert('微信分享功能需要在微信环境中使用');
+      this.$emit('show-toast', '微信分享功能需要在微信环境中使用', 'warning');
     },
-    
+
     shareToMoments() {
       // 朋友圈分享逻辑（需要微信SDK）
-      alert('朋友圈分享功能需要在微信环境中使用');
+      this.$emit('show-toast', '朋友圈分享功能需要在微信环境中使用', 'warning');
     },
     
     async generateQRCode() {
