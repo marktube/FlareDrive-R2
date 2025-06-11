@@ -136,8 +136,7 @@
           :items="[
             { text: '按照名称排序A-Z' },
             { text: '按照大小递增排序' },
-            { text: '按照大小递减排序' },
-            { text: '粘贴文件到网盘', disabled: !clipboard }
+            { text: '按照大小递减排序' }
           ]"
           @click="onMenuClick" />
         </div>
@@ -353,6 +352,26 @@
       </div>
     </Dialog>
 
+    <!-- 浮动粘贴按钮 -->
+    <div
+      v-if="clipboard && canUpload"
+      class="floating-paste-button"
+      :style="{ left: pasteButtonPosition.x + 'px', top: pasteButtonPosition.y + 'px' }"
+      @mousedown="startDragPasteButton"
+      @click="handlePasteButtonClick"
+    >
+      <div class="paste-button-content">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+        </svg>
+        <span>粘贴</span>
+      </div>
+      <div class="paste-file-info">
+        {{ clipboard.split('/').pop() }}
+      </div>
+    </div>
+
     <div style="flex:1"></div>
     <Footer />
   </div>
@@ -424,7 +443,11 @@ export default {
       selectedFolder: null,
       resolve: null,
       reject: null
-    }
+    },
+    // 浮动粘贴按钮相关
+    pasteButtonPosition: { x: 20, y: 100 },
+    isDraggingPasteButton: false,
+    dragOffset: { x: 0, y: 0 }
   }),
 
   computed: {
@@ -491,6 +514,12 @@ export default {
       this.restoreUserInfo();
     }
     this.fetchFiles();
+  },
+
+  beforeUnmount() {
+    // 清理事件监听器
+    document.removeEventListener('mousemove', this.dragPasteButton);
+    document.removeEventListener('mouseup', this.stopDragPasteButton);
   },
 
   methods: {
@@ -569,9 +598,15 @@ export default {
 
     async copyPaste(source, target) {
       const uploadUrl = `/api/write/items/${target}`;
-      await axios.put(uploadUrl, "", {
-        headers: { "x-amz-copy-source": encodeURIComponent(source) },
-      });
+
+      // 准备请求头
+      const headers = { "x-amz-copy-source": encodeURIComponent(source) };
+      const savedCredentials = localStorage.getItem('authCredentials');
+      if (savedCredentials) {
+        headers['Authorization'] = `Basic ${savedCredentials}`;
+      }
+
+      await axios.put(uploadUrl, "", { headers });
     },
 
     async createFolder() {
@@ -898,6 +933,50 @@ export default {
       this.showFolderDialog = false;
     },
 
+    // 浮动粘贴按钮相关方法
+    startDragPasteButton(event) {
+      this.isDraggingPasteButton = true;
+      this.dragOffset.x = event.clientX - this.pasteButtonPosition.x;
+      this.dragOffset.y = event.clientY - this.pasteButtonPosition.y;
+
+      document.addEventListener('mousemove', this.dragPasteButton);
+      document.addEventListener('mouseup', this.stopDragPasteButton);
+      event.preventDefault();
+    },
+
+    dragPasteButton(event) {
+      if (this.isDraggingPasteButton) {
+        this.pasteButtonPosition.x = event.clientX - this.dragOffset.x;
+        this.pasteButtonPosition.y = event.clientY - this.dragOffset.y;
+
+        // 限制在视窗范围内
+        const buttonWidth = 120;
+        const buttonHeight = 60;
+        this.pasteButtonPosition.x = Math.max(0, Math.min(window.innerWidth - buttonWidth, this.pasteButtonPosition.x));
+        this.pasteButtonPosition.y = Math.max(0, Math.min(window.innerHeight - buttonHeight, this.pasteButtonPosition.y));
+      }
+    },
+
+    stopDragPasteButton() {
+      this.isDraggingPasteButton = false;
+      document.removeEventListener('mousemove', this.dragPasteButton);
+      document.removeEventListener('mouseup', this.stopDragPasteButton);
+    },
+
+    async handlePasteButtonClick(event) {
+      // 如果正在拖拽，不执行粘贴
+      if (this.isDraggingPasteButton) {
+        return;
+      }
+
+      try {
+        await this.pasteFile();
+      } catch (error) {
+        console.error('粘贴文件失败:', error);
+        alert('粘贴文件失败: ' + (error.message || error));
+      }
+    },
+
     onMenuClick(text) {
       switch (text) {
         case "按照名称排序A-Z":
@@ -909,8 +988,6 @@ export default {
         case "按照大小递减排序":
           this.order = "大小↓";
           break;
-        case "粘贴文件到网盘":
-          return this.pasteFile();
       }
       this.files.sort((a, b) => {
         if (this.order === "大小↑") {
@@ -1486,5 +1563,49 @@ export default {
   position: absolute;
   top: 100%;
   right: 0;
+}
+
+/* 浮动粘贴按钮样式 */
+.floating-paste-button {
+  position: fixed;
+  z-index: 1000;
+  background: #007bff;
+  color: white;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  user-select: none;
+  min-width: 100px;
+  max-width: 200px;
+  transition: all 0.2s ease;
+}
+
+.floating-paste-button:hover {
+  background: #0056b3;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 123, 255, 0.4);
+}
+
+.floating-paste-button:active {
+  transform: translateY(0);
+}
+
+.paste-button-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.paste-file-info {
+  font-size: 11px;
+  opacity: 0.8;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 </style>
