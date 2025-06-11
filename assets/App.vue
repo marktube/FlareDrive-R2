@@ -137,7 +137,7 @@
             { text: '按照名称排序A-Z' },
             { text: '按照大小递增排序' },
             { text: '按照大小递减排序' },
-            { text: '粘贴文件到此目录', disabled: !clipboard || !canWrite() }
+            { text: '粘贴文件到此目录', disabled: !clipboard || !canWrite }
           ]"
           @click="onMenuClick" />
         </div>
@@ -197,7 +197,7 @@
             </svg>
             复制
           </button>
-          <button v-if="canWrite()" @click="batchMove" class="toolbar-btn">
+          <button v-if="canWrite" @click="batchMove" class="toolbar-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14,2 14,8 20,8"/>
@@ -207,7 +207,7 @@
             </svg>
             移动
           </button>
-          <button v-if="canWrite()" @click="batchDelete" class="toolbar-btn danger">
+          <button v-if="canWrite" @click="batchDelete" class="toolbar-btn danger">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3,6 5,6 21,6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -320,24 +320,24 @@
             <span>复制链接</span>
           </button>
         </li>
-        <li v-if="canWrite()">
+        <li v-if="canWrite">
           <button @click="moveFile(focusedItem + '_$folder$')">
             <span>移动</span>
           </button>
         </li>
-        <li v-if="clipboard && canWrite()">
+        <li v-if="clipboard && canWrite">
           <button @click="pasteFile()">
             <span>粘贴</span>
           </button>
         </li>
-        <li v-if="canWrite()">
+        <li v-if="canWrite">
           <button style="color: red" @click="removeFile(focusedItem + '_$folder$')">
             <span>删除</span>
           </button>
         </li>
       </ul>
       <ul v-else class="contextmenu-list">
-        <li v-if="canWrite()">
+        <li v-if="canWrite">
           <button @click="renameFile(focusedItem.key)">
             <span>重命名</span>
           </button>
@@ -352,7 +352,7 @@
             <span>复制</span>
           </button>
         </li>
-        <li v-if="canWrite()">
+        <li v-if="canWrite">
           <button @click="moveFile(focusedItem.key)">
             <span>移动</span>
           </button>
@@ -362,12 +362,12 @@
             <span>复制链接</span>
           </button>
         </li>
-        <li v-if="clipboard && canWrite()">
+        <li v-if="clipboard && canWrite">
           <button @click="pasteFile()">
             <span>粘贴</span>
           </button>
         </li>
-        <li v-if="canWrite()">
+        <li v-if="canWrite">
           <button style="color: red" @click="removeFile(focusedItem.key)">
             <span>删除</span>
           </button>
@@ -700,6 +700,18 @@ export default {
       return this.isLoggedIn;
     },
 
+
+
+    // 检查是否是只读用户
+    isReadOnlyUser() {
+      return this.currentUser && this.currentUser.isReadOnly;
+    },
+
+    // 检测是否为移动端
+    isMobile() {
+      return window.innerWidth <= 768;
+    },
+
     // 检查是否可以进行写操作（移动、复制、粘贴、删除）
     canWrite() {
       // 游客不允许写操作
@@ -712,16 +724,6 @@ export default {
       }
       // 已登录用户可以写操作
       return this.isLoggedIn;
-    },
-
-    // 检查是否是只读用户
-    isReadOnlyUser() {
-      return this.currentUser && this.currentUser.isReadOnly;
-    },
-
-    // 检测是否为移动端
-    isMobile() {
-      return window.innerWidth <= 768;
     },
   },
 
@@ -1369,7 +1371,7 @@ export default {
       if (this.selectedFiles.length === 0) return;
 
       // 检查写权限
-      if (!this.canWrite()) {
+      if (!this.canWrite) {
         this.showPermissionDialog('移动文件');
         return;
       }
@@ -1438,7 +1440,7 @@ export default {
       if (this.selectedFiles.length === 0) return;
 
       // 检查写权限
-      if (!this.canWrite()) {
+      if (!this.canWrite) {
         this.showPermissionDialog('删除文件');
         return;
       }
@@ -1829,7 +1831,7 @@ export default {
       if (!this.clipboard) return;
 
       // 检查写权限
-      if (!this.canWrite()) {
+      if (!this.canWrite) {
         this.showPermissionDialog('粘贴文件');
         return;
       }
@@ -1988,7 +1990,7 @@ export default {
 
     async removeFile(key) {
       // 检查写权限
-      if (!this.canWrite()) {
+      if (!this.canWrite) {
         this.showPermissionDialog('删除文件');
         return;
       }
@@ -2020,7 +2022,7 @@ export default {
 
     async renameFile(key) {
       // 检查写权限
-      if (!this.canWrite()) {
+      if (!this.canWrite) {
         this.showPermissionDialog('重命名文件');
         return;
       }
@@ -2048,7 +2050,7 @@ export default {
 
     async moveFile(key) {
       // 检查写权限
-      if (!this.canWrite()) {
+      if (!this.canWrite) {
         this.showPermissionDialog('移动文件');
         return;
       }
