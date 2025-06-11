@@ -959,7 +959,10 @@ export default {
 
     // 浮动粘贴按钮相关方法
     startDragPasteButton(event) {
-      this.isDraggingPasteButton = true;
+      // 延迟设置拖拽状态，避免与点击事件冲突
+      setTimeout(() => {
+        this.isDraggingPasteButton = true;
+      }, 100);
 
       // 支持触摸事件
       const clientX = event.touches ? event.touches[0].clientX : event.clientX;
@@ -986,15 +989,19 @@ export default {
         this.pasteButtonPosition.y = clientY - this.dragOffset.y;
 
         // 限制在视窗范围内
-        const buttonWidth = 120;
-        const buttonHeight = 60;
+        const buttonWidth = this.isMobile ? 50 : 120;
+        const buttonHeight = this.isMobile ? 50 : 60;
         this.pasteButtonPosition.x = Math.max(0, Math.min(window.innerWidth - buttonWidth, this.pasteButtonPosition.x));
         this.pasteButtonPosition.y = Math.max(0, Math.min(window.innerHeight - buttonHeight, this.pasteButtonPosition.y));
       }
     },
 
     stopDragPasteButton() {
-      this.isDraggingPasteButton = false;
+      // 延迟重置拖拽状态，确保点击事件能正确判断
+      setTimeout(() => {
+        this.isDraggingPasteButton = false;
+      }, 50);
+
       // 移除所有事件监听器
       document.removeEventListener('mousemove', this.dragPasteButton);
       document.removeEventListener('mouseup', this.stopDragPasteButton);
@@ -1002,7 +1009,7 @@ export default {
       document.removeEventListener('touchend', this.stopDragPasteButton);
     },
 
-    async handlePasteButtonClick(event) {
+    async handlePasteButtonClick() {
       // 如果正在拖拽，不执行粘贴
       if (this.isDraggingPasteButton) {
         return;
@@ -1027,7 +1034,7 @@ export default {
         case "按照大小递减排序":
           this.order = "大小↓";
           break;
-        case "粘贴文件到网盘":
+        case "粘贴文件到此目录":
           this.pasteFile();
           return; // 粘贴操作不需要排序
       }
