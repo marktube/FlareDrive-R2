@@ -356,18 +356,20 @@
     <div
       v-if="clipboard && canUpload"
       class="floating-paste-button"
+      :class="{ 'mobile': isMobile }"
       :style="{ left: pasteButtonPosition.x + 'px', top: pasteButtonPosition.y + 'px' }"
       @mousedown="startDragPasteButton"
+      @touchstart="startDragPasteButton"
       @click="handlePasteButtonClick"
     >
       <div class="paste-button-content">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
         </svg>
-        <span>粘贴</span>
+        <span v-if="!isMobile">粘贴</span>
       </div>
-      <div class="paste-file-info">
+      <div class="paste-file-info" v-if="!isMobile">
         {{ clipboard.split('/').pop() }}
       </div>
     </div>
@@ -445,7 +447,7 @@ export default {
       reject: null
     },
     // 浮动粘贴按钮相关
-    pasteButtonPosition: { x: 20, y: 100 },
+    pasteButtonPosition: { x: 0, y: 0 },
     isDraggingPasteButton: false,
     dragOffset: { x: 0, y: 0 }
   }),
@@ -503,6 +505,11 @@ export default {
     isReadOnlyUser() {
       return this.currentUser && this.currentUser.isReadOnly;
     },
+
+    // 检测是否为移动端
+    isMobile() {
+      return window.innerWidth <= 768;
+    },
   },
 
   mounted() {
@@ -514,12 +521,15 @@ export default {
       this.restoreUserInfo();
     }
     this.fetchFiles();
+    this.initPasteButtonPosition();
   },
 
   beforeUnmount() {
     // 清理事件监听器
     document.removeEventListener('mousemove', this.dragPasteButton);
     document.removeEventListener('mouseup', this.stopDragPasteButton);
+    document.removeEventListener('touchmove', this.dragPasteButton);
+    document.removeEventListener('touchend', this.stopDragPasteButton);
   },
 
   methods: {
@@ -933,21 +943,46 @@ export default {
       this.showFolderDialog = false;
     },
 
+    // 初始化粘贴按钮位置
+    initPasteButtonPosition() {
+      if (this.isMobile) {
+        // 移动端：右下角，避开返回按钮区域
+        this.pasteButtonPosition.x = window.innerWidth - 80;
+        this.pasteButtonPosition.y = window.innerHeight - 150;
+      } else {
+        // 桌面端：左侧中间
+        this.pasteButtonPosition.x = 20;
+        this.pasteButtonPosition.y = window.innerHeight / 2 - 50;
+      }
+    },
+
     // 浮动粘贴按钮相关方法
     startDragPasteButton(event) {
       this.isDraggingPasteButton = true;
-      this.dragOffset.x = event.clientX - this.pasteButtonPosition.x;
-      this.dragOffset.y = event.clientY - this.pasteButtonPosition.y;
 
+      // 支持触摸事件
+      const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+      const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+      this.dragOffset.x = clientX - this.pasteButtonPosition.x;
+      this.dragOffset.y = clientY - this.pasteButtonPosition.y;
+
+      // 添加鼠标和触摸事件监听
       document.addEventListener('mousemove', this.dragPasteButton);
       document.addEventListener('mouseup', this.stopDragPasteButton);
+      document.addEventListener('touchmove', this.dragPasteButton);
+      document.addEventListener('touchend', this.stopDragPasteButton);
       event.preventDefault();
     },
 
     dragPasteButton(event) {
       if (this.isDraggingPasteButton) {
-        this.pasteButtonPosition.x = event.clientX - this.dragOffset.x;
-        this.pasteButtonPosition.y = event.clientY - this.dragOffset.y;
+        // 支持触摸事件
+        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+        this.pasteButtonPosition.x = clientX - this.dragOffset.x;
+        this.pasteButtonPosition.y = clientY - this.dragOffset.y;
 
         // 限制在视窗范围内
         const buttonWidth = 120;
@@ -959,8 +994,11 @@ export default {
 
     stopDragPasteButton() {
       this.isDraggingPasteButton = false;
+      // 移除所有事件监听器
       document.removeEventListener('mousemove', this.dragPasteButton);
       document.removeEventListener('mouseup', this.stopDragPasteButton);
+      document.removeEventListener('touchmove', this.dragPasteButton);
+      document.removeEventListener('touchend', this.stopDragPasteButton);
     },
 
     async handlePasteButtonClick(event) {
@@ -1573,12 +1611,13 @@ export default {
   color: white;
   border-radius: 8px;
   padding: 8px 12px;
-  cursor: pointer;
+  cursor: move;
   box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
   user-select: none;
   min-width: 100px;
   max-width: 200px;
   transition: all 0.2s ease;
+  touch-action: none; /* 防止触摸时的默认行为 */
 }
 
 .floating-paste-button:hover {
@@ -1589,6 +1628,19 @@ export default {
 
 .floating-paste-button:active {
   transform: translateY(0);
+}
+
+/* 移动端样式 */
+.floating-paste-button.mobile {
+  min-width: 50px;
+  max-width: 50px;
+  padding: 12px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.floating-paste-button.mobile .paste-button-content {
+  justify-content: center;
 }
 
 .paste-button-content {
@@ -1607,5 +1659,29 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .floating-paste-button {
+    min-width: 50px;
+    max-width: 50px;
+    padding: 12px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .floating-paste-button .paste-button-content {
+    justify-content: center;
+    font-size: 0; /* 隐藏文字 */
+  }
+
+  .floating-paste-button .paste-button-content span {
+    display: none; /* 隐藏"粘贴"文字 */
+  }
+
+  .floating-paste-button .paste-file-info {
+    display: none; /* 隐藏文件信息 */
+  }
 }
 </style>
