@@ -326,7 +326,8 @@ export default {
     filteredCurrentIndex() {
       if (!this.filteredMediaList.length) return 0;
 
-      const currentMedia = this.mediaList[this.currentIndex];
+      // 使用 initialIndex 来获取正确的初始媒体文件
+      const currentMedia = this.mediaList[this.initialIndex];
       if (!currentMedia) return 0;
 
       return this.filteredMediaList.findIndex(media => media.key === currentMedia.key);
@@ -375,6 +376,12 @@ export default {
       });
     },
     initialIndex(newVal) {
+      // 无论预览是否显示，都需要更新 currentIndex
+      // 这样可以确保下次打开预览时显示正确的文件
+      this.currentIndex = this.filteredCurrentIndex;
+    },
+    mediaList() {
+      // 当媒体列表变化时，重新计算当前索引
       if (this.show) {
         this.currentIndex = this.filteredCurrentIndex;
       }
