@@ -1,6 +1,6 @@
 <template>
   <div v-if="show" class="media-preview-overlay" @click="closePreview">
-    <div class="media-preview-container" @click.stop>
+    <div class="media-preview-container" @click.stop @touchstart="onContainerTouch">
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-indicator">
         <div class="spinner"></div>
@@ -55,9 +55,19 @@
       </div>
 
       <!-- 控制栏 -->
-      <div v-if="!loading && !error" class="preview-controls">
+      <div v-if="!loading && !error" class="preview-controls"
+           @mousemove="onControlsMouseMove"
+           @mouseleave="onControlsMouseLeave">
+
+        <!-- 隐藏状态提示（仅移动端） -->
+        <div v-if="isMobile && controlsAutoHide" class="controls-hint" @click="showControls">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
+            <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9Z" />
+          </svg>
+          <span>点击显示控制</span>
+        </div>
         <!-- 移动端顶部控制栏 -->
-        <div v-if="isMobile" class="mobile-top-controls">
+        <div v-if="isMobile" class="mobile-top-controls" :class="{ 'auto-hide': controlsAutoHide }">
           <div class="media-info">
             <span class="media-name">{{ currentMedia.name }}</span>
             <span v-if="filteredMediaList.length > 1" class="media-counter">
@@ -87,7 +97,7 @@
         </div>
 
         <!-- 桌面端顶部控制栏 -->
-        <div v-else class="top-controls">
+        <div v-else class="top-controls" :class="{ 'auto-hide': controlsAutoHide }">
           <div class="media-info">
             <span class="media-name">{{ currentMedia.name }}</span>
             <span v-if="filteredMediaList.length > 1" class="media-counter">
@@ -258,9 +268,13 @@ export default {
       
       // 分享相关
       showShareModal: false,
-      
+
       // 移动端检测
-      isMobile: false
+      isMobile: false,
+
+      // 控制栏自动隐藏
+      controlsAutoHide: false,
+      controlsHideTimer: null
     }
   },
   computed: {
@@ -336,6 +350,10 @@ export default {
         document.addEventListener('keydown', this.handleKeydown);
         document.body.style.overflow = 'hidden';
 
+        // 初始化控制栏自动隐藏
+        this.controlsAutoHide = false;
+        this.startControlsHideTimer();
+
         // 强制触发图片加载检查
         this.$nextTick(() => {
           this.checkImageLoad();
@@ -343,6 +361,7 @@ export default {
       } else {
         document.removeEventListener('keydown', this.handleKeydown);
         document.body.style.overflow = '';
+        this.clearControlsHideTimer();
       }
     },
     currentIndex(newVal) {
@@ -543,6 +562,41 @@ export default {
     
     detectMobile() {
       this.isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    },
+
+    // 控制栏自动隐藏功能
+    startControlsHideTimer() {
+      this.clearControlsHideTimer();
+      this.controlsHideTimer = setTimeout(() => {
+        this.controlsAutoHide = true;
+      }, 3000); // 3秒后自动隐藏
+    },
+
+    clearControlsHideTimer() {
+      if (this.controlsHideTimer) {
+        clearTimeout(this.controlsHideTimer);
+        this.controlsHideTimer = null;
+      }
+    },
+
+    showControls() {
+      this.controlsAutoHide = false;
+      this.startControlsHideTimer();
+    },
+
+    onControlsMouseMove() {
+      this.showControls();
+    },
+
+    onControlsMouseLeave() {
+      this.startControlsHideTimer();
+    },
+
+    // 移动端触摸显示控制栏
+    onContainerTouch() {
+      if (this.isMobile) {
+        this.showControls();
+      }
     },
 
     // 检查图片加载状态
@@ -806,6 +860,31 @@ export default {
   pointer-events: none;
 }
 
+/* 控制提示 */
+.controls-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 25px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  pointer-events: auto;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  animation: fadeInOut 2s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 .top-controls {
   position: absolute;
   top: 20px;
@@ -815,6 +894,17 @@ export default {
   justify-content: space-between;
   align-items: flex-start;
   pointer-events: auto;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.top-controls.auto-hide {
+  opacity: 0.3;
+  transform: translateY(-10px);
+}
+
+.top-controls:hover {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
 }
 
 .media-info {
@@ -823,6 +913,13 @@ export default {
   padding: 10px 15px;
   border-radius: 8px;
   backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+/* 自动隐藏时降低透明度 */
+.auto-hide .media-info {
+  background: rgba(0, 0, 0, 0.3);
+  opacity: 0.6;
 }
 
 .media-name {
@@ -971,6 +1068,18 @@ export default {
   justify-content: space-between;
   align-items: flex-start;
   pointer-events: auto;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.mobile-top-controls.auto-hide {
+  opacity: 0.3;
+  transform: translateY(-10px);
+}
+
+.mobile-top-controls:active,
+.mobile-top-controls:focus-within {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
 }
 
 .mobile-top-actions {

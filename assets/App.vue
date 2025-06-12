@@ -2736,8 +2736,10 @@ body:has(.mobile-paste-toolbar) {
 /* 快捷键说明样式 */
 .keyboard-shortcuts {
   margin: 20px auto 10px;
-  padding: 0 20px;
-  max-width: 1200px;
+  padding: 10px;
+  width: 60%;
+  max-width: 95%;
+  transition: width 0.3s ease;
 }
 
 .shortcuts-container {
@@ -2793,11 +2795,21 @@ body:has(.mobile-paste-toolbar) {
   text-align: center;
 }
 
+/* 桌面端中等屏幕优化 */
+@media (max-width: 1280px) {
+  .keyboard-shortcuts {
+    width: 768px;
+    padding: 10px;
+  }
+}
+
 /* 移动端优化 */
 @media (max-width: 768px) {
   .keyboard-shortcuts {
     margin: 15px 10px 5px;
     padding: 0;
+    width: auto;
+    max-width: none;
   }
 
   .shortcuts-container {
