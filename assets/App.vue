@@ -1076,7 +1076,16 @@ export default {
             this.fetchFiles();
           }, 100);
         } else {
+          // 处理登录失败，包括限制相关的错误
           this.loginError = data.message || '登录失败';
+
+          // 如果用户被封禁，显示特殊样式
+          if (data.banned) {
+            this.loginError = `🔒 ${this.loginError}`;
+          } else if (data.remainingAttempts !== undefined && data.remainingAttempts < 5) {
+            // 如果剩余尝试次数较少，给出警告
+            this.loginError += ` ⚠️`;
+          }
         }
       } catch (error) {
         this.loginError = '登录失败，请重试';
