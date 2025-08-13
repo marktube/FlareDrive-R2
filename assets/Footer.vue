@@ -15,11 +15,13 @@
       </a>
     </div>
 
-    <div class="stats">
+    <!-- <div class="stats">
       访问次数：<span id="vercount_value_site_pv">😯</span>次 | 访客人数：<span id="vercount_value_site_uv">😯</span>人
-    </div>
+    </div> -->
 
     <div class="project-links">
+      <strong>到这已经是第四开了:</strong><a href="https://github.com/marktube/FlareDrive-R2" target="_blank"
+        rel="noopener noreferrer">FlareDrive-R2增强优化版</a>
       <strong>到这已经是第三开了:</strong><a href="https://github.com/52op/FlareDrive-R2" target="_blank"
         rel="noopener noreferrer">FlareDrive-R2增强版</a>
       <strong>感谢:</strong><a href="https://github.com/willow-god/FlareDrive-R2" target="_blank"
