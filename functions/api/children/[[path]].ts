@@ -47,12 +47,8 @@ export async function onRequestGet(context) {
       if(headers.get('Authorization')) {
         const Authorization = headers.get('Authorization').split("Basic ")[1];
         const account = atob(Authorization);
-        if(account && (context.env[account] || context.env[account + ':r'])) {
-          if(context.env[account]){
-            const allow = context.env[account].split(",");
-          }else{
-            const allow = context.env[account + ':r'].split(",");
-          }
+        if(account && context.env[account]) {
+          const allow = context.env[account].split(",");
 
           // 如果不是管理员，需要过滤内容
           if (!allow.includes("*")) {
