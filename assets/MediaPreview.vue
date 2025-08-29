@@ -15,7 +15,7 @@
       </div>
 
       <!-- 图片预览 -->
-      <div v-else-if="isImage" class="image-viewer">
+      <div v-else-if="isImage" class="image-viewer" id="pr-img-view">
         <img
           :src="currentMedia.url"
           :alt="currentMedia.name"
@@ -180,6 +180,12 @@
             <button class="control-btn" @click="resetImage" title="重置">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M12,3A9,9 0 0,1 21,12A9,9 0 0,1 12,21A9,9 0 0,1 3,12A9,9 0 0,1 12,3M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9Z" />
+              </svg>
+            </button>
+
+            <button class="control-btn" @click="resetImage" title="全景模式">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M5 5 L15 5 L15 15 L5 15 Z" />
               </svg>
             </button>
           </div>
@@ -440,6 +446,13 @@ export default {
       this.rotation = 0;
       this.translateX = 0;
       this.translateY = 0;
+    },
+    panoImage() {
+      pannellum.viewer('pr-img-view', {
+        "type": "equirectangular",
+        "panorama": this.currentMedia.url,
+        "showFullscreenCtrl": true
+      });
     },
     
     // 双击放大
