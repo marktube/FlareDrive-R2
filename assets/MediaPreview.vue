@@ -448,10 +448,12 @@ export default {
       this.translateY = 0;
     },
     panoImage() {
+      this.controlsAutoHide = true;
       pannellum.viewer('pr-img-view', {
         "type": "equirectangular",
         "panorama": this.currentMedia.url,
-        "showFullscreenCtrl": true
+        "showFullscreenCtrl": true,
+        "autoLoad": true
       });
     },
     
