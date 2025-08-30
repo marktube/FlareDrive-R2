@@ -426,11 +426,13 @@ export default {
     // 导航控制
     previousMedia() {
       if (this.currentIndex > 0) {
+        this.isShowBottom = true;
         this.currentIndex--;
       }
     },
     nextMedia() {
       if (this.currentIndex < this.filteredMediaList.length - 1) {
+        this.isShowBottom = true;
         this.currentIndex++;
       }
     },
