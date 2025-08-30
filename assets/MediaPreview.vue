@@ -354,6 +354,7 @@ export default {
         // 计算在过滤后列表中的正确索引
         this.currentIndex = this.filteredCurrentIndex;
         this.loading = true; // 显示时开始加载
+        this.isShowBottom = true;
         this.error = false;
         this.resetImage();
         this.detectMobile();
