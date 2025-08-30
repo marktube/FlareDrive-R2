@@ -154,7 +154,7 @@
         </div>
 
         <!-- 底部控制栏 - 仅显示图片控制按钮 -->
-        <div v-if="isImage" class="bottom-controls">
+        <div v-if="isImage && isShowBottom" class="bottom-controls">
           <!-- 图片控制按钮 -->
           <div class="image-controls">
             <button class="control-btn" @click="zoomOut" title="缩小">
@@ -280,7 +280,10 @@ export default {
 
       // 控制栏自动隐藏
       controlsAutoHide: false,
-      controlsHideTimer: null
+      controlsHideTimer: null,
+
+      // 是否显示底部控制栏
+      isShowBottom: true
     }
   },
   computed: {
@@ -448,7 +451,7 @@ export default {
       this.translateY = 0;
     },
     panoImage() {
-      this.controlsAutoHide = true;
+      this.isShowBottom = false;
       pannellum.viewer('pr-img-view', {
         "type": "equirectangular",
         "panorama": this.currentMedia.url,
