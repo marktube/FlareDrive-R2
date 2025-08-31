@@ -60,7 +60,7 @@
            @mouseleave="onControlsMouseLeave">
 
         <!-- 隐藏状态提示（仅移动端） -->
-        <div v-if="isMobile && controlsAutoHide && isShowBottom" class="controls-hint" @click="showControls">
+        <div v-if="isMobile && controlsAutoHide" class="controls-hint" @click="showControls">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
             <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9Z" />
           </svg>
@@ -68,7 +68,7 @@
         </div>
         <!-- 移动端顶部控制栏 -->
         <div v-if="isMobile" class="mobile-top-controls" :class="{ 'auto-hide': controlsAutoHide }">
-          <div v-if="isShowBottom" class="media-info">
+          <div class="media-info">
             <span class="media-name">{{ currentMedia.name }}</span>
             <span v-if="filteredMediaList.length > 1" class="media-counter">
               {{ currentIndex + 1 }} / {{ filteredMediaList.length }}
@@ -454,6 +454,7 @@ export default {
       this.translateY = 0;
     },
     panoImage() {
+      document.getElementById("pr-img-view").innerHTML = "";
       this.isShowBottom = false;
       pannellum.viewer('pr-img-view', {
         "type": "equirectangular",
