@@ -341,9 +341,9 @@
           </button>
         </li>
         <li>
-          <a :href="`/raw/${focusedItem.key}`" target="_blank" download>
+          <button @click="singleDownload(focusedItem.key)">
             <span>下载</span>
-          </a>
+          </button>
         </li>
         <li>
           <button @click="copyFile(focusedItem.key)">
@@ -1983,6 +1983,22 @@ export default {
         console.error('删除失败:', error);
         this.showCustomToast('删除失败: ' + (error.message || '未知错误'), 'error');
       }
+    },
+
+    async singleDownload(key){
+      // 关闭右键菜单
+      this.showContextMenu = false;
+      
+      try {
+        const link = document.createElement('a');
+        link.href = `/raw/${key}`;
+        link.download = key.split('/').pop();
+        link.click();
+        this.showCustomToast(`开始下载文件`, 'success');
+      }catch (error) {
+        this.showCustomToast('文件下载失败: ' + error.message, 'error');
+      }
+      
     },
 
     async renameFile(key) {
