@@ -816,6 +816,10 @@ export default {
     copyLink(link) {
       const url = new URL(link, window.location.origin);
       navigator.clipboard.writeText(url.toString());
+
+      this.showCustomToast('文件链接已复制到剪贴板', 'success');
+      // 关闭右键菜单
+      this.showContextMenu = false;
     },
 
     // 复制单个文件到剪贴板
@@ -1791,6 +1795,9 @@ export default {
         return;
       }
 
+      // 关闭右键菜单
+      this.showContextMenu = false;
+      
       try {
         // 检查是否是多文件粘贴
         if (Array.isArray(this.clipboard)) {
@@ -1949,6 +1956,9 @@ export default {
         this.showPermissionDialog('删除文件');
         return;
       }
+      
+      // 关闭右键菜单
+      this.showContextMenu = false;
 
       try {
         const fileName = key.split('/').pop();
@@ -1982,6 +1992,9 @@ export default {
         return;
       }
 
+      // 关闭右键菜单
+      this.showContextMenu = false;
+
       try {
         const currentName = key.split('/').pop();
         const newName = await this.showInputPrompt("重命名文件", "新名称:", currentName);
@@ -2009,6 +2022,9 @@ export default {
         this.showPermissionDialog('移动文件');
         return;
       }
+
+      // 关闭右键菜单
+      this.showContextMenu = false;
 
       let targetPath = null; // 声明在外层作用域，以便错误处理时使用
 
