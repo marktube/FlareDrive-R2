@@ -506,6 +506,7 @@ button {
 
 .user-status-text {
   color: #333;
+  height: 15px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
