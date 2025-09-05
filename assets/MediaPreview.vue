@@ -183,7 +183,7 @@
               </svg>
             </button>
 
-            <button class="control-btn" @click="panoImage" title="全景模式">
+            <button v-if="this.currentMedia.size > 30 * 1024 * 1024" class="control-btn" @click="panoImage" title="全景模式">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M5 5 L15 5 L15 15 L5 15 Z" />
               </svg>

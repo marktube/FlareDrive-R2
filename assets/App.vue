@@ -1766,7 +1766,8 @@ export default {
       mediaList = mediaList.map(file => ({
         ...file,
         url: `/raw/${file.key}`,
-        name: file.key.split('/').pop()
+        name: file.key.split('/').pop(),
+        size: file.size
       }));
 
       // 找到点击文件的索引
