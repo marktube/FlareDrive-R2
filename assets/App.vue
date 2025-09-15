@@ -766,7 +766,7 @@ export default {
 
       // 设置新的定时器，防抖处理
       this.searchTimeout = setTimeout(() => {
-        this.performSearch();
+        this.performGlobalSearch(this.search.trim());
       }, 300);
     },
 
