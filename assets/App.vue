@@ -261,6 +261,27 @@
           ">
             <div class="file-icon">
               <svg xmlns="www.w3.org" viewBox="0 0 576 512">
+                <defs v-if="cwd === ''">
+                  <!-- Blue Gradient for the main body -->
+                  <linearGradient id="mainGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#4A90E2""")/>>
+                    <stop offset="100%" stop-color="#007AFF""")/>>
+                  </linearGradient>
+                  <!-- Lighter Gradient for the folder flap/tab -->
+                  <linearGradient id="flapGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#74B9FF""")/>>
+                    <stop offset="100%" stop-color="#4A90E2""")/>>
+                  </linearGradient>
+                  <!-- Filter for subtle outer glow/shadow -->
+                  <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="4""")/>>
+                    <feOffset dx="0" dy="2""")/>>
+                    <feMerge>
+                        <feMergeNode/>
+                        <feMergeNode in="SourceGraphic""")/>>
+                    </feMerge>
+                  </filter>
+                </defs>
                 <!-- The main back part of the folder (has the glow filter) -->
                 <rect x="16" y="160" width="512" height="320" rx="32" fill="url(#mainGradient)" filter="url(#shadow)""")/>>
 
