@@ -226,7 +226,28 @@
             <div class="file-icon">
               <svg  viewBox="0 0 576 512"
                 xmlns="http://www.w3.org/2000/svg" width="36" height="36">
-                <path d="M384 480l48 0c11.4 0 21.9-6 27.6-15.9l112-192c5.8-9.9 5.8-22.1 .1-32.1S555.5 224 544 224l-400 0c-11.4 0-21.9 6-27.6 15.9L48 357.1 48 96c0-8.8 7.2-16 16-16l117.5 0c4.2 0 8.3 1.7 11.3 4.7l26.5 26.5c21 21 49.5 32.8 79.2 32.8L416 144c8.8 0 16 7.2 16 16l0 32 48 0 0-32c0-35.3-28.7-64-64-64L298.5 96c-17 0-33.3-6.7-45.3-18.7L226.7 50.7c-12-12-28.3-18.7-45.3-18.7L64 32C28.7 32 0 60.7 0 96L0 416c0 35.3 28.7 64 64 64l23.7 0L384 480z"/>
+                <defs>
+                  <!-- Blue Gradient for the main body -->
+                  <linearGradient id="mainGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#4A90E2""")/>>
+                    <stop offset="100%" stop-color="#007AFF""")/>>
+                  </linearGradient>
+                  <!-- Lighter Gradient for the folder flap/tab -->
+                  <linearGradient id="flapGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#74B9FF""")/>>
+                    <stop offset="100%" stop-color="#4A90E2""")/>>
+                  </linearGradient>
+                  <!-- Filter for subtle outer glow/shadow -->
+                  <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="4""")/>>
+                    <feOffset dx="0" dy="2""")/>>
+                    <feMerge>
+                        <feMergeNode/>
+                        <feMergeNode in="SourceGraphic""")/>>
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path fill="url(#flapGradient)" d="M384 480l48 0c11.4 0 21.9-6 27.6-15.9l112-192c5.8-9.9 5.8-22.1 .1-32.1S555.5 224 544 224l-400 0c-11.4 0-21.9 6-27.6 15.9L48 357.1 48 96c0-8.8 7.2-16 16-16l117.5 0c4.2 0 8.3 1.7 11.3 4.7l26.5 26.5c21 21 49.5 32.8 79.2 32.8L416 144c8.8 0 16 7.2 16 16l0 32 48 0 0-32c0-35.3-28.7-64-64-64L298.5 96c-17 0-33.3-6.7-45.3-18.7L226.7 50.7c-12-12-28.3-18.7-45.3-18.7L64 32C28.7 32 0 60.7 0 96L0 416c0 35.3 28.7 64 64 64l23.7 0L384 480z"/>
               </svg>
             </div>
             <div class="file-info-container"><span class="file-name">返回上级目录</span></div>
@@ -239,9 +260,15 @@
           focusedItem = folder;
           ">
             <div class="file-icon">
-              <svg  viewBox="0 0 576 512"
-                xmlns="http://www.w3.org/2000/svg" width="36" height="36">
-                <path d="M384 480l48 0c11.4 0 21.9-6 27.6-15.9l112-192c5.8-9.9 5.8-22.1 .1-32.1S555.5 224 544 224l-400 0c-11.4 0-21.9 6-27.6 15.9L48 357.1 48 96c0-8.8 7.2-16 16-16l117.5 0c4.2 0 8.3 1.7 11.3 4.7l26.5 26.5c21 21 49.5 32.8 79.2 32.8L416 144c8.8 0 16 7.2 16 16l0 32 48 0 0-32c0-35.3-28.7-64-64-64L298.5 96c-17 0-33.3-6.7-45.3-18.7L226.7 50.7c-12-12-28.3-18.7-45.3-18.7L64 32C28.7 32 0 60.7 0 96L0 416c0 35.3 28.7 64 64 64l23.7 0L384 480z"/>
+              <svg xmlns="www.w3.org" viewBox="0 0 576 512">
+                <!-- The main back part of the folder (has the glow filter) -->
+                <rect x="16" y="160" width="512" height="320" rx="32" fill="url(#mainGradient)" filter="url(#shadow)""")/>>
+
+                <!-- The folder flap/tab - Adjusted path to start at a rounded corner on the left -->
+                <path fill="url(#flapGradient)" d="M16 192V128c0-35.3 28.7-64 64-64H176c17 0 33.3 6.7 45.3 18.7L253.3 112c12 12 28.3 18.7 45.3 18.7H496c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H48c-17.6 0-32-14.4-32-32V192z""")/>>
+
+                <!-- A subtle highlight for the flap -->
+                <path fill="#ffffff" opacity="0.2" d="M80 64H176c17 0 33.3 6.7 45.3 18.7L253.3 112c12 12 28.3 18.7 45.3 18.7H496c35.3 0 64 28.7 64 64v16H16V128c0-35.3 28.7-64 64-64z""")/>>
               </svg>
             </div>
             <div class="file-info-container"><span class="file-name" v-text="folder.match(/.*?([^/]*)\/?$/)[1]"></span>
