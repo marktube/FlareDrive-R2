@@ -229,21 +229,21 @@
                 <defs>
                   <!-- Blue Gradient for the main body -->
                   <linearGradient id="mainGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#4A90E2""")/>>
-                    <stop offset="100%" stop-color="#007AFF""")/>>
+                    <stop offset="0%" stop-color="#4A90E2"/>>
+                    <stop offset="100%" stop-color="#007AFF"/>>
                   </linearGradient>
                   <!-- Lighter Gradient for the folder flap/tab -->
                   <linearGradient id="flapGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#74B9FF""")/>>
-                    <stop offset="100%" stop-color="#4A90E2""")/>>
+                    <stop offset="0%" stop-color="#74B9FF"/>>
+                    <stop offset="100%" stop-color="#4A90E2"/>>
                   </linearGradient>
                   <!-- Filter for subtle outer glow/shadow -->
                   <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
-                    <feGaussianBlur in="SourceAlpha" stdDeviation="4""")/>>
-                    <feOffset dx="0" dy="2""")/>>
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>>
+                    <feOffset dx="0" dy="2"/>>
                     <feMerge>
                         <feMergeNode/>
-                        <feMergeNode in="SourceGraphic""")/>>
+                        <feMergeNode in="SourceGraphic"/>>
                     </feMerge>
                   </filter>
                 </defs>
@@ -264,32 +264,32 @@
                 <defs v-if="cwd === ''">
                   <!-- Blue Gradient for the main body -->
                   <linearGradient id="mainGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#4A90E2""")/>>
-                    <stop offset="100%" stop-color="#007AFF""")/>>
+                    <stop offset="0%" stop-color="#4A90E2"/>>
+                    <stop offset="100%" stop-color="#007AFF"/>>
                   </linearGradient>
                   <!-- Lighter Gradient for the folder flap/tab -->
                   <linearGradient id="flapGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="#74B9FF""")/>>
-                    <stop offset="100%" stop-color="#4A90E2""")/>>
+                    <stop offset="0%" stop-color="#74B9FF"/>>
+                    <stop offset="100%" stop-color="#4A90E2"/>>
                   </linearGradient>
                   <!-- Filter for subtle outer glow/shadow -->
                   <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
-                    <feGaussianBlur in="SourceAlpha" stdDeviation="4""")/>>
-                    <feOffset dx="0" dy="2""")/>>
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>>
+                    <feOffset dx="0" dy="2"/>>
                     <feMerge>
                         <feMergeNode/>
-                        <feMergeNode in="SourceGraphic""")/>>
+                        <feMergeNode in="SourceGraphic"/>>
                     </feMerge>
                   </filter>
                 </defs>
                 <!-- The main back part of the folder (has the glow filter) -->
-                <rect x="16" y="160" width="512" height="320" rx="32" fill="url(#mainGradient)" filter="url(#shadow)""")/>>
+                <rect x="16" y="160" width="512" height="320" rx="32" fill="url(#mainGradient)" filter="url(#shadow)"/>>
 
                 <!-- The folder flap/tab - Adjusted path to start at a rounded corner on the left -->
-                <path fill="url(#flapGradient)" d="M16 192V128c0-35.3 28.7-64 64-64H176c17 0 33.3 6.7 45.3 18.7L253.3 112c12 12 28.3 18.7 45.3 18.7H496c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H48c-17.6 0-32-14.4-32-32V192z""")/>>
+                <path fill="url(#flapGradient)" d="M16 192V128c0-35.3 28.7-64 64-64H176c17 0 33.3 6.7 45.3 18.7L253.3 112c12 12 28.3 18.7 45.3 18.7H496c35.3 0 64 28.7 64 64V448c0 35.3-28.7 64-64 64H48c-17.6 0-32-14.4-32-32V192z"/>>
 
                 <!-- A subtle highlight for the flap -->
-                <path fill="#ffffff" opacity="0.2" d="M80 64H176c17 0 33.3 6.7 45.3 18.7L253.3 112c12 12 28.3 18.7 45.3 18.7H496c35.3 0 64 28.7 64 64v16H16V128c0-35.3 28.7-64 64-64z""")/>>
+                <path fill="#ffffff" opacity="0.2" d="M80 64H176c17 0 33.3 6.7 45.3 18.7L253.3 112c12 12 28.3 18.7 45.3 18.7H496c35.3 0 64 28.7 64 64v16H16V128c0-35.3 28.7-64 64-64z"/>>
               </svg>
             </div>
             <div class="file-info-container"><span class="file-name" v-text="folder.match(/.*?([^/]*)\/?$/)[1]"></span>
