@@ -1,47 +1,12 @@
-// 解析用户账户信息，支持只读权限
-function parseUserAccount(account, context) {
-    let isReadOnly = false;
-    let permissions = null;
+import { resolveAccount } from "@/utils/auth";
 
-    console.log('parseUserAccount - checking account:', account);
-    console.log('parseUserAccount - env[account] exists:', !!context.env[account]);
-    console.log('parseUserAccount - env[account] value:', context.env[account]);
-    console.log('parseUserAccount - env[account + ":r"] exists:', !!context.env[account + ':r']);
-    console.log('parseUserAccount - env[account + ":r"] value:', context.env[account + ':r']);
-
-    // 先检查普通用户
-    if(context.env[account]) {
-        permissions = context.env[account].split(",");
-        isReadOnly = false;
-        console.log('parseUserAccount - found normal user, permissions:', permissions);
-    }
-    // 再检查只读用户
-    else if(context.env[account + ':r']) {
-        permissions = context.env[account + ':r'].split(",");
-        isReadOnly = true;
-        console.log('parseUserAccount - found readonly user, permissions:', permissions);
-    } else {
-        console.log('parseUserAccount - user not found in environment variables');
-    }
-
-    const result = {
-        exists: !!permissions,
-        permissions: permissions || [],
-        isReadOnly: isReadOnly,
-        actualAccount: account
-    };
-
-    console.log('parseUserAccount - final result:', result);
-    return result;
-}
-
-// 检查写入权限的函数
-function checkWritePermission(context, dopath) {
+// 检查写入权限的函数（先查 D1 账户，再回退旧版环境变量账户）
+async function checkWritePermission(context, dopath) {
     console.log('checkWritePermission - checking write permission for path:', dopath);
 
     const guestEnv = context.env["GUEST"] || context.env["guest"];
     if(guestEnv){
-        if(dopath.startsWith("_$flaredrive$/thumbnails/"))return true;
+        // 见 utils/auth.ts 中的说明：缩略图路径不再无条件放行，走统一的按目录匹配逻辑
         const allow_guest = guestEnv.split(",")
         for (var aa of allow_guest){
             if(aa == "*"){
@@ -59,7 +24,7 @@ function checkWritePermission(context, dopath) {
     if(!account)return false
 
     // 解析用户账户信息
-    const userInfo = parseUserAccount(account, context);
+    const userInfo = await resolveAccount(account, context);
     if(!userInfo.exists)return false;
 
     // 只读用户不能进行写操作
@@ -106,8 +71,11 @@ function checkWritePermission(context, dopath) {
 }
 
 export async function onRequestPost(context) {
+    // 声明在 try 外层，这样即使解析请求体失败，catch 块里也能安全访问 path
+    let requestBody: { path?: string } = {};
+
     try {
-        const requestBody = await context.request.json();
+        requestBody = await context.request.json();
         const { path } = requestBody;
 
         console.log('check-write-permission - checking path:', path);
@@ -117,7 +85,7 @@ export async function onRequestPost(context) {
 
         console.log('check-write-permission - test path:', testPath);
 
-        const hasPermission = checkWritePermission(context, testPath);
+        const hasPermission = await checkWritePermission(context, testPath);
 
         console.log('check-write-permission - result:', hasPermission);
 
@@ -137,7 +105,7 @@ export async function onRequestPost(context) {
         return new Response(JSON.stringify({
             hasPermission: false,
             error: error.message,
-            path: requestBody?.path || 'unknown'
+            path: requestBody.path || 'unknown'
         }), {
             status: 200, // 返回200避免触发浏览器错误处理
             headers: {

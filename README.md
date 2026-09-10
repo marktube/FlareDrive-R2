@@ -218,7 +218,106 @@ BUCKET
 
 > 📝 详细配置说明请参考 `登录限制功能配置说明.md` 文件
 
-### 6. 重新部署项目
+### 6. 配置 D1 数据库账户体系（可选，推荐）
+
+[#6-配置-d1-数据库账户体系可选推荐](#6-配置-d1-数据库账户体系可选推荐)
+
+默认情况下，账户仍然使用第 3 步中基于环境变量的 `username:password=dir1/,dir2/` 配置方式（无需任何改动即可继续使用）。
+
+增强版额外支持将账户存储在 **Cloudflare D1** 数据库中，优点是：
+
+- ✅ 用户可以**自助修改密码**，无需管理员改环境变量、重新部署
+- ✅ 密码使用 PBKDF2-SHA256 加盐哈希存储，不落明文
+- ✅ 登录时优先查询 D1，查不到再自动回退到旧版环境变量账户，**两种方式可以混用，完全向后兼容**
+
+#### 6.1 创建 D1 数据库
+
+1. 进入 Cloudflare 控制台 → **Workers & Pages** → **D1 SQL Database**
+2. 点击 **Create Database**，输入一个名称（例如 `flaredrive-users`）
+
+#### 6.2 绑定 D1 到项目
+
+1. 进入 Pages 项目设置 → **Settings** → **Functions**
+2. 在 **D1 database bindings** 部分点击 **Add binding**
+3. **Variable name**：`DB`（必须叫这个名字，代码里写死了这个绑定名）
+4. **D1 database**：选择刚创建的数据库
+
+#### 6.3 初始化表结构
+
+在本地使用 Wrangler 执行仓库自带的迁移文件：
+
+```bash
+# 首次在本地测试可以不加 --remote，先在本地模拟数据库里建表
+wrangler d1 execute flaredrive-users --file=./migrations/0001_create_users.sql
+
+# 确认无误后，对线上（生产）数据库执行：
+wrangler d1 execute flaredrive-users --file=./migrations/0001_create_users.sql --remote
+```
+
+`flaredrive-users` 替换成你实际的数据库名称。
+
+#### 6.4 创建第一个 D1 账户
+
+D1 里还没有任何账户时，无法直接注册（`/api/auth/register` 接口本身也需要一个管理员身份才能调用）。推荐用你在第 3 步配置的**环境变量管理员账户**（例如 `admin:123456=*`）来创建第一批 D1 账户，这样可以平滑过渡：
+
+```bash
+curl -X POST https://你的域名/api/auth/register \
+  -H "Authorization: Basic $(echo -n 'admin:123456' | base64)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "alice",
+    "password": "至少6位的密码",
+    "permissions": ["personal/", "work/"],
+    "isReadOnly": false
+  }'
+```
+
+- `permissions` 传 `["*"]` 表示管理员（拥有全部目录权限）
+- `isReadOnly` 为 `true` 时创建只读账户
+- 之后也可以直接用某个已存在的 D1 管理员账户（`isAdmin` 为真）来调用该接口创建更多用户
+
+**用户名重复时**，接口会返回 `409 Conflict` 和如下结构，方便前端直接判断并提示：
+
+```json
+{
+  "success": false,
+  "code": "USERNAME_TAKEN",
+  "message": "用户名 \"alice\" 已存在，请换一个用户名"
+}
+```
+
+重复判定包含两种情况：D1 数据库里已有同名账户，或环境变量里已配置同名账户（因为登录时优先匹配 D1 账户，同名会导致原有的环境变量账户失效）。
+
+创建成功后，该用户就可以像环境变量账户一样正常登录、上传、下载了，同时还能使用第 6.5 节的接口自助改密码。
+
+#### 6.5 用户自助修改密码
+
+已登录用户可以调用 `/api/auth/change-password` 接口修改自己的密码（仅对 D1 账户生效，环境变量账户请管理员直接改环境变量）：
+
+```bash
+curl -X POST https://你的域名/api/auth/change-password \
+  -H "Authorization: Basic $(echo -n 'alice:旧密码' | base64)" \
+  -H "Content-Type: application/json" \
+  -d '{ "newPassword": "至少6位的新密码" }'
+```
+
+前端登录后，点击右上角用户菜单里的「修改密码」即可打开对话框完成上述操作，无需手动调用接口。
+
+> ⚠️ D1 与环境变量账户可以同名同时存在，此时登录会优先匹配 D1 中的账户。建议不要让两者重名，避免混淆。
+
+### 🔒 安全加固说明
+
+本次改动顺带修复了几个安全问题，升级时请留意：
+
+1. **未鉴权的文件写入（严重）**：`/api/write/items/[[path]].ts` 的分片上传接口（`POST ?uploads` 创建、`POST ?uploadId` 完成）此前完全没有做权限校验，配合已有鉴权的 `PUT` 分片上传步骤，任何人不登录即可写入任意目录。现已补上校验，与 `PUT`/`DELETE` 保持一致。
+2. **`/raw/` 文件预览的存储型 XSS**：上传一个 `Content-Type` 为 `text/html`（或 `.svg` 等）的文件后，通过 `/raw/文件路径` 直接打开会在本域名下执行其中的脚本，从而窃取保存在 `localStorage` 里的登录凭据。现已给 `/raw/` 响应统一加上 `X-Content-Type-Options: nosniff` 和 `Content-Security-Policy: sandbox`（彻底禁止脚本执行、表单提交等，不影响图片/视频/音频的正常预览），并对 `text/html`、`image/svg+xml` 等类型额外强制 `Content-Disposition: attachment`。
+3. **游客缩略图写入范围过大**：只要配置了 `GUEST` 环境变量（不论允许哪些目录），未登录用户此前都能写入共享的 `_$flaredrive$/thumbnails/` 目录。现在缩略图路径和普通文件一样，按 `GUEST` 配置的具体目录做匹配，需要显式在 `GUEST` 里加上该路径（或 `*`）才允许游客写入。
+4. **Basic Auth 凭据被跨站请求利用的风险**：写操作接口此前在 401 响应里带有 `WWW-Authenticate` 头，会导致浏览器弹出原生登录框并缓存凭据，而缓存后的 Basic 凭据会被浏览器自动附加到**任意来源**发起的同域请求上，构成 CSRF 隐患。现已移除该响应头，并为 `PUT`/`POST`/`DELETE` 增加了 `Origin` 同源校验（仅在请求带有 `Origin` 且与当前域名不一致时才拒绝，不影响 curl 等不带 `Origin` 头的合法调用）。
+5. **权限校验路径与实际写入路径解码方式不一致**、以及仓库里附带的 `test-permission.html` / `test-login-limit.html` 调试页面此前会被一起部署到线上、且没有任何鉴权：已将权限校验路径改为与实际写入路径一致的解码方式，并移除了这两个调试页面（如果你本地还需要用它们做权限测试，可以从 Git 历史中找回，但不建议再部署到线上）。
+
+如果你是从旧版本升级，建议同时检查一下自己的 `GUEST` 环境变量配置是否符合预期（第 3 条的行为变化可能影响到依赖旧行为的部署）。
+
+### 8. 重新部署项目
 
 完成所有设置后，回到 Pages 控制台，点击「Deployments」页面右上角的「Trigger Redeploy」以重新部署服务。
 

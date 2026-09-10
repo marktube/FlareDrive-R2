@@ -1,3 +1,5 @@
+import { resolveAccount } from "@/utils/auth";
+
 // 查询用户封禁状态API
 function getClientIP(request) {
     return request.headers.get('CF-Connecting-IP') || 
@@ -35,8 +37,9 @@ export async function onRequestPost(context) {
 
         const Authorization = authHeader.split("Basic ")[1];
         const account = atob(Authorization);
-        
-        if (!account || !context.env[account]) {
+
+        const adminInfo = !account ? null : await resolveAccount(account, context);
+        if (!adminInfo || !adminInfo.exists) {
             return new Response(JSON.stringify({
                 success: false,
                 message: "无效的管理员凭据"
@@ -47,8 +50,7 @@ export async function onRequestPost(context) {
         }
 
         // 检查是否为管理员
-        const permissions = context.env[account].split(",");
-        if (!permissions.includes("*")) {
+        if (!adminInfo.isAdmin) {
             return new Response(JSON.stringify({
                 success: false,
                 message: "需要管理员权限"

@@ -1,3 +1,5 @@
+import { resolveAccount } from "@/utils/auth";
+
 export async function onRequest(context) {
     try {
         var headers = new Headers(context.request.headers);
@@ -29,8 +31,9 @@ export async function onRequest(context) {
             });
         }
 
-        // 检查环境变量中是否存在该账户
-        if(!context.env[account]) {
+        // 校验账户：优先查 D1，再回退旧版环境变量账户
+        const userInfo = await resolveAccount(account, context);
+        if(!userInfo.exists) {
             return new Response("用户名或密码错误", {
                 status: 401,
             });

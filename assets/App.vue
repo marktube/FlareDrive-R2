@@ -14,12 +14,12 @@
     <div v-if="showModal" class="modal-overlay" @click="closeModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3>{{ isLoggedIn ? '用户管理' : '登录' }}</h3>
+          <h3>{{ showChangePasswordForm ? '修改密码' : (isLoggedIn ? '用户管理' : '登录') }}</h3>
           <button class="close-button" @click="closeModal">&times;</button>
         </div>
         <div class="modal-body">
           <!-- 已登录状态 -->
-          <div v-if="isLoggedIn" class="user-info">
+          <div v-if="isLoggedIn && !showChangePasswordForm" class="user-info">
             <div class="current-user">
               <svg viewBox="0 0 24 24" width="32" height="32" fill="#4CAF50">
                 <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
@@ -30,10 +30,55 @@
               </div>
             </div>
             <div class="user-actions">
+              <button @click="openChangePasswordForm" class="switch-user-button">修改密码</button>
               <button @click="switchUser" class="switch-user-button">切换用户</button>
               <button @click="logout" class="logout-button">退出登录</button>
             </div>
           </div>
+
+          <!-- 修改密码表单 -->
+          <form v-else-if="isLoggedIn && showChangePasswordForm" @submit.prevent="handleChangePassword">
+            <div class="form-group">
+              <label for="old-password">当前密码:</label>
+              <input
+                type="password"
+                id="old-password"
+                v-model="changePasswordForm.oldPassword"
+                required
+                autocomplete="current-password"
+              >
+            </div>
+            <div class="form-group">
+              <label for="new-password">新密码:</label>
+              <input
+                type="password"
+                id="new-password"
+                v-model="changePasswordForm.newPassword"
+                required
+                minlength="6"
+                autocomplete="new-password"
+              >
+            </div>
+            <div class="form-group">
+              <label for="confirm-password">确认新密码:</label>
+              <input
+                type="password"
+                id="confirm-password"
+                v-model="changePasswordForm.confirmPassword"
+                required
+                minlength="6"
+                autocomplete="new-password"
+              >
+            </div>
+            <div class="form-actions">
+              <button type="button" @click="closeChangePasswordForm" class="cancel-button">返回</button>
+              <button type="submit" class="login-submit-button" :disabled="changePasswordLoading">
+                {{ changePasswordLoading ? '提交中...' : '确认修改' }}
+              </button>
+            </div>
+            <div v-if="changePasswordError" class="error-message">{{ changePasswordError }}</div>
+            <div v-if="changePasswordSuccess" class="error-message" style="color:#4CAF50">{{ changePasswordSuccess }}</div>
+          </form>
 
           <!-- 未登录状态 -->
           <form v-else @submit.prevent="handleLogin">
@@ -643,6 +688,16 @@ export default {
     },
     loginLoading: false,
     loginError: '',
+    // 修改密码相关
+    showChangePasswordForm: false,
+    changePasswordForm: {
+      oldPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    },
+    changePasswordLoading: false,
+    changePasswordError: '',
+    changePasswordSuccess: '',
     // 媒体预览相关
     showMediaPreview: false,
     previewMediaList: [],
@@ -1091,6 +1146,80 @@ export default {
       this.showModal = false;
       this.loginError = '';
       this.loginLoading = false;
+      this.closeChangePasswordForm();
+    },
+
+    // 打开修改密码表单
+    openChangePasswordForm() {
+      this.showChangePasswordForm = true;
+      this.changePasswordError = '';
+      this.changePasswordSuccess = '';
+      this.changePasswordForm.oldPassword = '';
+      this.changePasswordForm.newPassword = '';
+      this.changePasswordForm.confirmPassword = '';
+    },
+
+    // 关闭修改密码表单，回到用户信息面板
+    closeChangePasswordForm() {
+      this.showChangePasswordForm = false;
+      this.changePasswordError = '';
+      this.changePasswordSuccess = '';
+      this.changePasswordLoading = false;
+    },
+
+    // 处理修改密码
+    async handleChangePassword() {
+      this.changePasswordError = '';
+      this.changePasswordSuccess = '';
+
+      const { oldPassword, newPassword, confirmPassword } = this.changePasswordForm;
+
+      if (newPassword.length < 6) {
+        this.changePasswordError = '新密码长度至少为6位';
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        this.changePasswordError = '两次输入的新密码不一致';
+        return;
+      }
+      if (newPassword === oldPassword) {
+        this.changePasswordError = '新密码不能与当前密码相同';
+        return;
+      }
+
+      this.changePasswordLoading = true;
+
+      try {
+        const username = this.currentUser && this.currentUser.username;
+        const credentials = btoa(`${username}:${oldPassword}`);
+
+        const response = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          },
+          body: JSON.stringify({ oldPassword, newPassword })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          this.changePasswordSuccess = data.message || '密码修改成功，请重新登录';
+          // 密码已变更，旧的登录态不再有效，2秒后自动退出登录，要求用新密码重新登录
+          setTimeout(() => {
+            this.logout();
+          }, 2000);
+        } else {
+          this.changePasswordError = data.message || '密码修改失败';
+        }
+      } catch (error) {
+        this.changePasswordError = '密码修改失败，请重试';
+        console.error('修改密码错误:', error);
+      } finally {
+        this.changePasswordLoading = false;
+      }
     },
 
     // 处理登录

@@ -1,5 +1,5 @@
 import { notFound, parseBucketPath } from "@/utils/bucket";
-import { get_list_auth_status } from "@/utils/auth";
+import { get_list_auth_status, resolveAccount } from "@/utils/auth";
 
 export async function onRequestGet(context) {
   try {
@@ -8,7 +8,7 @@ export async function onRequestGet(context) {
     if (!bucket || prefix.startsWith("_$flaredrive$/")) return notFound();
 
     // 检查文件列表访问权限
-    const authResult = get_list_auth_status(context, path || "");
+    const authResult = await get_list_auth_status(context, path || "");
 
     if (!authResult.hasAccess) {
       // 没有权限访问，返回需要登录的响应（不包含WWW-Authenticate头，避免弹出浏览器登录框）
@@ -47,8 +47,11 @@ export async function onRequestGet(context) {
       if(headers.get('Authorization')) {
         const Authorization = headers.get('Authorization').split("Basic ")[1];
         const account = atob(Authorization);
-        if(account && context.env[account]) {
-          const allow = context.env[account].split(",");
+        // 解析用户账户信息（先查 D1，再回退环境变量），只读和普通用户共用同一套过滤逻辑
+        const userInfo = account ? await resolveAccount(account, context) : null;
+
+        if(userInfo && userInfo.exists) {
+          const allow = userInfo.permissions;
 
           // 如果不是管理员，需要过滤内容
           if (!allow.includes("*")) {
@@ -77,34 +80,6 @@ export async function onRequestGet(context) {
               return false;
             });
           }
-        }else if(account && context.env[account + ':r']){
-          // 处理只读用户
-          const allow = context.env[account + ':r'].split(",");
-
-          // 获取游客权限，已登录用户也应该能访问游客目录
-          const guestEnv = context.env["GUEST"] || context.env["guest"];
-          const allow_guest = guestEnv ? guestEnv.split(",") : [];
-
-          // 合并用户权限和游客权限
-          const combinedPermissions = [...allow, ...allow_guest];
-
-          // 过滤文件：显示用户有权限的文件 + 游客可访问的文件
-          objKeys = objKeys.filter(file => {
-            for (var a of combinedPermissions) {
-              if (a == "*") return true;
-              if (file.key.startsWith(a)) return true;
-            }
-            return false;
-          });
-
-          // 过滤文件夹：显示用户有权限的文件夹 + 游客可访问的文件夹
-          folders = folders.filter(folder => {
-            for (var a of combinedPermissions) {
-              if (a == "*") return true;
-              if (folder.startsWith(a)) return true;
-            }
-            return false;
-          });
         }
       }
     } else {

@@ -1,3 +1,5 @@
+import { resolveAccount } from "@/utils/auth";
+
 // 登录限制配置
 const LOGIN_LIMIT_CONFIG = {
     MAX_ATTEMPTS: 5,        // 最大尝试次数
@@ -167,20 +169,10 @@ export async function onRequestPost(context) {
             });
         }
 
-        // 检查用户账户：先检查普通用户，再检查只读用户
-        let isReadOnly = false;
-        let permissions = null;
-
-        // 先检查普通用户
-        if(context.env[account]) {
-            permissions = context.env[account].split(",");
-            isReadOnly = false;
-        }
-        // 再检查只读用户
-        else if(context.env[account + ':r']) {
-            permissions = context.env[account + ':r'].split(",");
-            isReadOnly = true;
-        }
+        // 校验账户：优先查询 D1 数据库中的账户，找不到则回退到旧版环境变量账户
+        const userInfo = await resolveAccount(account, context);
+        const isReadOnly = userInfo.isReadOnly;
+        const permissions = userInfo.exists ? userInfo.permissions : null;
 
         // 如果都不存在，记录失败并返回错误
         if(!permissions) {
@@ -216,8 +208,9 @@ export async function onRequestPost(context) {
             user: {
                 username: username,
                 permissions: permissions,
-                isAdmin: permissions.includes("*"),
-                isReadOnly: isReadOnly
+                isAdmin: userInfo.isAdmin || permissions.includes("*"),
+                isReadOnly: isReadOnly,
+                accountSource: userInfo.source // "d1" 或 "env"，前端一般无需关心
             }
         }), {
             status: 200,

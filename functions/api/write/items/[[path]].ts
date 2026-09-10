@@ -1,5 +1,15 @@
 import { notFound, parseBucketPath } from "@/utils/bucket";
 import {get_auth_status} from "@/utils/auth";
+import {isCrossOriginRequest, crossOriginRejectedResponse} from "@/utils/csrf";
+
+function unauthorizedResponse() {
+  // 不设置 WWW-Authenticate 头：一是避免弹出浏览器原生登录框，
+  // 二是避免浏览器缓存 Basic 凭据后被跨站请求利用（见 utils/csrf.ts 的说明）
+  return new Response("没有操作权限", {
+    status: 401,
+    headers: { "Content-Type": "text/plain" },
+  });
+}
 
 export async function onRequestPostCreateMultipart(context) {
   const [bucket, path] = parseBucketPath(context);
@@ -48,6 +58,11 @@ export async function onRequestPostCompleteMultipart(context) {
 }
 
 export async function onRequestPost(context) {
+  // 修复：此前 POST（创建分片上传 / 完成分片上传）完全没有做权限校验，
+  // 任何人都可以不登录直接写入任意路径（配合 PUT 分片上传即可绕过认证）。
+  if (isCrossOriginRequest(context)) return crossOriginRejectedResponse();
+  if (!(await get_auth_status(context))) return unauthorizedResponse();
+
   const url = new URL(context.request.url);
   const searchParams = new URLSearchParams(url.search);
 
@@ -89,13 +104,9 @@ export async function onRequestPutMultipart(context) {
 }
 
 export async function onRequestPut(context) {
-  if(!get_auth_status(context)){
-    var header = new Headers()
-    header.set("WWW-Authenticate",'Basic realm="需要登录"')
-    return new Response("没有操作权限", {
-        status: 401,
-        headers: header,
-    });
+  if (isCrossOriginRequest(context)) return crossOriginRejectedResponse();
+  if(!(await get_auth_status(context))){
+    return unauthorizedResponse();
    }
   const url = new URL(context.request.url);
 
@@ -133,7 +144,7 @@ export async function onRequestPut(context) {
 
 export async function onRequestHead(context) {
   // HEAD请求用于检查写入权限，不实际执行操作
-  if(!get_auth_status(context)){
+  if(!(await get_auth_status(context))){
     // 不设置WWW-Authenticate头，避免弹出浏览器登录框
     return new Response("没有操作权限", {
         status: 403, // 使用403而不是401，避免触发浏览器认证
@@ -148,13 +159,9 @@ export async function onRequestHead(context) {
 }
 
 export async function onRequestDelete(context) {
-  if(!get_auth_status(context)){
-    var header = new Headers()
-    header.set("WWW-Authenticate",'Basic realm="需要登录"')
-    return new Response("没有操作权限", {
-        status: 401,
-        headers: header,
-    });
+  if (isCrossOriginRequest(context)) return crossOriginRejectedResponse();
+  if(!(await get_auth_status(context))){
+    return unauthorizedResponse();
    }
   const [bucket, path] = parseBucketPath(context);
   if (!bucket) return notFound();
