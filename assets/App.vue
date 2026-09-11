@@ -422,7 +422,7 @@
           </button>
         </li>
         <li v-if="canWrite">
-          <button style="color: red" @click="removeFile(focusedItem + '_$folder$')">
+          <button style="color: red" @click="removeFolder(focusedItem)">
             <span>删除</span>
           </button>
         </li>
@@ -2160,6 +2160,71 @@ export default {
         }
         console.error('删除失败:', error);
         this.showCustomToast('删除失败: ' + (error.message || '未知错误'), 'error');
+      }
+    },
+
+    // 删除文件夹：此前这里只会删除 "_$folder$" 这个空标记文件，
+    // 文件夹里实际的文件和子文件夹会被静默留下（既没被删掉，也脱离了正常管理）。
+    // 现在改为先用 getAllItems 递归枚举文件夹下的全部内容（文件 + 子文件夹标记），
+    // 逐个删除，最后再删除文件夹自身的标记，和"移动文件夹"用的是同一套递归逻辑。
+    async removeFolder(folderPath) {
+      // 检查写权限
+      if (!this.canWrite) {
+        this.showPermissionDialog('删除文件夹');
+        return;
+      }
+
+      // 关闭右键菜单
+      this.showContextMenu = false;
+
+      const folderName = folderPath.split('/').filter(Boolean).pop() || folderPath;
+      const folderMarkerKey = folderPath + '_$folder$';
+
+      try {
+        const confirmed = await this.showConfirmPrompt(
+          '删除文件夹',
+          `确定要删除文件夹 "${folderName}" 吗？文件夹内的所有文件和子文件夹都会被永久删除，此操作无法撤销。`,
+          { type: 'danger', confirmText: '删除', cancelText: '取消' }
+        );
+        if (!confirmed) return;
+
+        // 递归获取文件夹内的所有文件和子文件夹标记
+        const allItems = await this.getAllItems(folderPath);
+
+        const total = allItems.length;
+        let done = 0;
+        if (total > 0) this.uploadProgress = 0;
+
+        for (const item of allItems) {
+          try {
+            await this.deleteFile(item.key);
+          } catch (itemError) {
+            // 权限错误直接中止整个删除流程并向上抛出
+            if (itemError.isAuthError) throw itemError;
+            // 单个文件删除失败不阻断整体流程，记录后继续删除其余文件，
+            // 避免因为某一个文件失败导致整个文件夹删不掉
+            console.error(`删除 ${item.key} 失败:`, itemError);
+          }
+          done++;
+          if (total > 0) this.uploadProgress = (done / total) * 100;
+        }
+
+        // 最后删除文件夹自身的标记
+        await this.deleteFile(folderMarkerKey);
+
+        this.uploadProgress = null;
+        this.fetchFiles();
+        this.showCustomToast(`文件夹 "${folderName}" 已删除`, 'success');
+      } catch (error) {
+        this.uploadProgress = null;
+        if (error === false) return; // 用户取消
+
+        if (error.isAuthError) {
+          this.showPermissionDialog('删除文件夹');
+          return;
+        }
+        console.error('删除文件夹失败:', error);
+        this.showCustomToast('删除文件夹失败: ' + (error.message || '未知错误'), 'error');
       }
     },
 

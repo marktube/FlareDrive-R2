@@ -18,7 +18,7 @@ defineProps({
 <template>
   <div class="file-icon">
     <img
-      v-if="thumbnail && contentType.startsWith('image/') && contentType !== 'image/svg+xml'"
+      v-if="thumbnail && (contentType.startsWith('image/') || contentType.startsWith('video/')) && contentType !== 'image/svg+xml'"
       :src="thumbnail"
       :width="size"
       :height="size"
