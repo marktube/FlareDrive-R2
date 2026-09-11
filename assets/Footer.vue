@@ -45,8 +45,43 @@ export default {
       homeUrl: "https://blog.liuyc.uk/about.html",
       blogUrl: "https://blog.liuyc.uk/",
       githubUrl: "https://github.com/marktube",
-      emailUrl: "mailto:liuyc@sem.tsinghua.edu.cn"
+      emailUrl: "mailto:liuyanchao99@gmail.com"
     };
+  },
+  mounted() {
+    this.loadVercount();
+  },
+  methods: {
+    // 之前依赖 index.html 里的 <script defer src="https://events.vercount.one/js">，
+    // 该脚本只会在页面 "load" 时扫描一次 DOM 并填充 id 匹配的 <span>。但本项目的
+    // Footer 组件是通过 vue3-sfc-loader 异步 fetch + 编译后才挂载到页面上的，
+    // 这些 <span> 在脚本执行那一刻根本还不存在，所以永远填不进去，且该脚本不会重试。
+    // 现在改为在 mounted() 里直接调用 Vercount 的公开统计接口，此时这些 <span>
+    // 保证已经存在于 DOM 中，用返回的数据自己写入文本内容。
+    async loadVercount() {
+      const pvEl = document.getElementById("vercount_value_site_pv");
+      const uvEl = document.getElementById("vercount_value_site_uv");
+      if (!pvEl && !uvEl) return;
+
+      try {
+        const response = await fetch("https://events.vercount.one/api/v2/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: window.location.href })
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const result = await response.json();
+        const data = result && result.data;
+        if (!data) return;
+
+        if (pvEl && typeof data.site_pv !== "undefined") pvEl.textContent = data.site_pv;
+        if (uvEl && typeof data.site_uv !== "undefined") uvEl.textContent = data.site_uv;
+      } catch (error) {
+        console.warn("Vercount 访问统计加载失败:", error);
+        // 请求失败时保留原本的占位符（😯），不影响页面其余功能
+      }
+    }
   }
 };
 </script>
