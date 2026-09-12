@@ -12,7 +12,13 @@ function json(obj: unknown, status: number) {
 // 管理员专用接口，用于在 D1 数据库中创建新账户。
 // 请求头需要携带管理员的 Basic Authorization（可以是 D1 管理员，也可以是旧版
 // 环境变量里配置的 "user:pass=*" 管理员，方便从环境变量账户平滑过渡到 D1）。
-// Body: { "username": "...", "password": "...", "permissions": ["dir1/", "dir2/"] | "*", "isReadOnly"?: boolean }
+// Body: { "username": "...", "password": "...", "permissions": ["dir1/", "dir2/"] | "*", "isReadOnly"?: boolean, "isAdmin"?: boolean }
+//
+// 注意：permissions 里的 "*"（全部目录读写权限）和 isAdmin（能管理账户系统，
+// 比如调用本接口创建新账户、封禁/解封用户）是两个完全独立的权限维度。
+// 给一个账户 "*" 权限只代表它能读写所有目录，不会让它自动变成管理员；
+// 只有调用方显式传入 isAdmin: true（且调用方本身必须已经是真正的管理员，
+// 已经在上面的权限校验里保证了这一点）才会创建出真正的管理员账户。
 export async function onRequestPost(context) {
     try {
         if (!hasD1(context)) {
@@ -32,11 +38,12 @@ export async function onRequestPost(context) {
         }
 
         const body = await context.request.json().catch(() => ({} as any));
-        const { username, password, permissions, isReadOnly } = body as {
+        const { username, password, permissions, isReadOnly, isAdmin } = body as {
             username?: string;
             password?: string;
             permissions?: string[] | string;
             isReadOnly?: boolean;
+            isAdmin?: boolean;
         };
 
         if (!username || !password || !permissions) {
@@ -84,7 +91,10 @@ export async function onRequestPost(context) {
                 password,
                 permissions: Array.isArray(permissions) ? permissions : String(permissions).split(","),
                 isReadOnly: !!isReadOnly,
-                isAdmin: false
+                // 调用方已经在上面通过了 adminInfo.isAdmin 校验，是真正的管理员，
+                // 所以这里允许它显式把新账户也设为管理员——这是现在唯一创建 D1
+                // 管理员账户的正规途径（is_admin 不再能通过 "*" 权限间接拿到）。
+                isAdmin: !!isAdmin
             });
         } catch (error: any) {
             // 并发创建同名用户时，上面的预检查可能都通过，最终由数据库的

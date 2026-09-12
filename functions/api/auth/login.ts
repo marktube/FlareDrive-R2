@@ -208,7 +208,7 @@ export async function onRequestPost(context) {
             user: {
                 username: username,
                 permissions: permissions,
-                isAdmin: userInfo.isAdmin || permissions.includes("*"),
+                isAdmin: userInfo.isAdmin, // resolveAccount 已经按来源正确算好了，不要再用 permissions.includes("*") 覆盖它（这正是被发现的越权漏洞）
                 isReadOnly: isReadOnly,
                 accountSource: userInfo.source // "d1" 或 "env"，前端一般无需关心
             }

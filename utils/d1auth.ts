@@ -99,7 +99,16 @@ export async function verifyD1Credentials(
     username: user.username as string,
     permissions,
     isReadOnly: !!user.is_readonly,
-    isAdmin: !!user.is_admin || permissions.includes("*"),
+    // 安全修复：isAdmin 之前是 `!!user.is_admin || permissions.includes("*")`。
+    // 由于 is_admin 列此前从未被任何代码路径设为 1（register.ts 一直硬编码
+    // isAdmin: false），这个 "||" 分支实际上是唯一能让 D1 账户拿到 isAdmin=true
+    // 的途径——任何被授予了 "*" 目录权限的账户（哪怕同时标记为 isReadOnly=true，
+    // 也就是本意只是"能看所有目录但不能写"的账户）都会被当成真正的管理员，
+    // 从而通过 register.ts / unban.ts / ban-status.ts 里的管理员校验，
+    // 能创建新账户、封禁/解封用户——这是两种完全不同的权限维度，
+    // "拥有全部目录读写权限" 不应该自动等于 "能管理账户系统"。
+    // 现在 isAdmin 只看 is_admin 这一个独立字段，不再受目录权限影响。
+    isAdmin: !!user.is_admin,
   };
 }
 
