@@ -605,6 +605,15 @@
       </div>
     </div>
 
+    <!-- 屏幕中央的阻断式进度提示（比如重新生成缩略图这种耗时较长的操作） -->
+    <div v-if="centerProgress.visible" class="center-progress-overlay">
+      <div class="center-progress-box">
+        <div class="center-progress-spinner"></div>
+        <div class="center-progress-text">{{ centerProgress.text }}</div>
+        <div v-if="centerProgress.fileName" class="center-progress-filename">{{ centerProgress.fileName }}</div>
+      </div>
+    </div>
+
     <div style="flex:1"></div>
 
     <!-- 快捷键说明 -->
@@ -650,6 +659,7 @@
 <script>
 import {
   generateThumbnail,
+  generateThumbnailFromUrl,
   blobDigest,
   multipartUpload,
   SIZE_LIMIT,
@@ -767,6 +777,9 @@ export default {
     showToast: false,
     toastMessage: '',
     toastType: 'success', // 'success', 'error', 'warning'
+    // 屏幕中央的阻断式进度提示，用于耗时较长的操作（比如重新生成大视频的缩略图），
+    // 和右上角一闪而过的 toast 不一样，这个会一直显示直到操作结束
+    centerProgress: { visible: false, text: '', fileName: '' },
     // 多选功能相关
     selectedFiles: [], // 选中的文件列表
     isMultiSelectMode: false, // 是否处于多选模式
@@ -2267,8 +2280,9 @@ export default {
     },
 
     // 为已存在的文件重新生成缩略图，不需要重新上传整个文件。
-    // 流程：下载原始文件内容（用于本地截图/取帧）→ 本地生成新缩略图 →
-    // 上传缩略图小文件 → 调用轻量的元数据修复接口，把新缩略图摘要写回原文件，
+    // 流程：先修复 content-type（如果缺失）→ 直接用支持 Range 分段请求的网络地址
+    // 生成缩略图（不需要先把整份文件下载到内存里，大文件明显更快）→
+    // 上传缩略图小文件 → 把新缩略图摘要写回原文件。
     // 顺带修复很多旧文件缺失的 content-type（这是"部分视频缩略图显示不出来"
     // 更根本的原因：旧版普通 PUT 上传从未存储过 content-type）。
     async regenerateThumbnail(file) {
@@ -2287,32 +2301,31 @@ export default {
         return;
       }
 
+      this.centerProgress = { visible: true, text: '正在修复文件类型信息...', fileName };
+
       try {
-        this.showCustomToast('正在重新生成缩略图...', 'info');
+        // 第一步：先确保 content-type 是对的。这一步很关键——如果不先修复，
+        // 下一步用网络地址加载视频时，浏览器会读到旧的/缺失的 content-type，
+        // 根本不知道这是个视频，直接加载失败。这一步只更新元数据，
+        // 不需要重新上传文件本体，很快。
+        await axios.post(`/api/write/items/${key}?fixMetadata`, { contentType: guessedType });
 
-        // 下载原始文件内容。注意：这里强制用文件名后缀推断出的真实类型
-        // 覆盖 fetch 返回的 Content-Type——很多旧文件此前上传时从未存储过
-        // content-type，/raw/ 对它们返回的 Content-Type 本身就是缺失/错误的，
-        // 不能直接拿来判断"这是图片还是视频"。
-        const response = await fetch(`/raw/${key}`);
-        if (!response.ok) throw new Error(`下载原文件失败: HTTP ${response.status}`);
-        const arrayBuffer = await response.arrayBuffer();
-        const blobWithCorrectType = new Blob([arrayBuffer], { type: guessedType });
+        this.centerProgress.text = guessedType.startsWith('video/')
+          ? '正在读取视频帧（大文件可能需要几秒）...'
+          : '正在读取图片...';
 
-        const thumbnailBlob = await generateThumbnail(blobWithCorrectType);
+        // 直接基于网络地址生成缩略图：浏览器会按需分段（Range）请求，
+        // 不用先把整个文件下载到内存里再解码，大文件也能较快出结果。
+        // 加时间戳避免读到修复前的缓存响应。
+        const srcUrl = `/raw/${key}?t=${Date.now()}`;
+        const thumbnailBlob = await generateThumbnailFromUrl(srcUrl, guessedType);
         if (!thumbnailBlob) throw new Error('未能从文件中生成缩略图');
 
+        this.centerProgress.text = '正在保存缩略图...';
+
         const digestHex = await blobDigest(thumbnailBlob);
-
-        // 上传新生成的缩略图小文件
         await axios.put(`/api/write/items/_$flaredrive$/thumbnails/${digestHex}.png`, thumbnailBlob);
-
-        // 用轻量的元数据修复接口，把新缩略图摘要 + 正确的 content-type
-        // 写回原文件，全程不需要把原始文件内容重新上传一遍
-        await axios.post(`/api/write/items/${key}?fixMetadata`, {
-          thumbnail: digestHex,
-          contentType: guessedType,
-        });
+        await axios.post(`/api/write/items/${key}?fixMetadata`, { thumbnail: digestHex });
 
         await this.fetchFiles();
         this.showCustomToast(`"${fileName}" 的缩略图已重新生成`, 'success');
@@ -2320,10 +2333,14 @@ export default {
         const status = error?.response?.status;
         if (error.isAuthError || status === 401 || status === 403) {
           this.showPermissionDialog('重新生成缩略图');
-          return;
+        } else {
+          console.error('重新生成缩略图失败:', error);
+          // 部分视频failure是浏览器本身就无法解码对应的编码格式（比如某些
+          // HEVC/H.265），这种情况下前端没有办法强行解出缩略图，只能提示用户。
+          this.showCustomToast('重新生成缩略图失败: ' + (error.message || '未知错误，可能是该视频编码格式当前浏览器不支持解码'), 'error');
         }
-        console.error('重新生成缩略图失败:', error);
-        this.showCustomToast('重新生成缩略图失败: ' + (error.message || '未知错误'), 'error');
+      } finally {
+        this.centerProgress = { visible: false, text: '', fileName: '' };
       }
     },
 
@@ -3275,6 +3292,58 @@ body:has(.mobile-paste-toolbar) {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+/* 屏幕中央的阻断式进度提示 */
+.center-progress-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001; /* 高于右上角的 toast (10000)，操作进行中时更明确地遮挡其余操作 */
+}
+
+.center-progress-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 36px;
+  min-width: 220px;
+  max-width: 80vw;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.center-progress-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: center-progress-spin 0.8s linear infinite;
+}
+
+@keyframes center-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.center-progress-text {
+  font-size: 15px;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.center-progress-filename {
+  font-size: 13px;
+  color: #6b7280;
+  word-break: break-all;
 }
 
 /* 移动端提示样式 */
