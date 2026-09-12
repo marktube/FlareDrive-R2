@@ -453,6 +453,11 @@
             <span>复制链接</span>
           </button>
         </li>
+        <li v-if="canWrite && canRegenerateThumbnail(focusedItem.key)">
+          <button @click="regenerateThumbnail(focusedItem)">
+            <span>重新生成缩略图</span>
+          </button>
+        </li>
         <li v-if="clipboard && canWrite">
           <button @click="pasteFile()">
             <span>粘贴</span>
@@ -655,6 +660,29 @@ import MimeIcon from "./MimeIcon.vue";
 import UploadPopup from "./UploadPopup.vue";
 import Footer from "./Footer.vue";
 import MediaPreview from "./MediaPreview.vue";
+
+// 根据扩展名推断真实 MIME 类型，专供"重新生成缩略图"功能使用。
+// 之所以不能直接信任 /raw/ 返回的 Content-Type：很多旧文件是通过普通 PUT
+// 上传的，服务端此前从未存储 content-type（另一个已修复的 bug），
+// /raw/ 对这些文件返回的 Content-Type 本身就是缺失或者是错误的通用值，
+// 用它来判断"这是不是视频/图片"是不可靠的，只能从文件名后缀反推。
+const EXT_MIME_MAP = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  svg: "image/svg+xml",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  ogv: "video/ogg",
+  mov: "video/quicktime",
+  avi: "video/x-msvideo",
+  wmv: "video/x-ms-wmv",
+  mkv: "video/x-matroska",
+};
 
 export default {
   data: () => ({
@@ -2078,7 +2106,7 @@ export default {
       const { basedir, file } = this.uploadQueue.pop(0);
       let thumbnailDigest = null;
 
-      if (file.type.startsWith("image/") || file.type === "video/mp4") {
+      if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
         try {
           const thumbnailBlob = await generateThumbnail(file);
           const digestHex = await blobDigest(thumbnailBlob);
@@ -2225,6 +2253,77 @@ export default {
         }
         console.error('删除文件夹失败:', error);
         this.showCustomToast('删除文件夹失败: ' + (error.message || '未知错误'), 'error');
+      }
+    },
+
+    // 根据文件名后缀判断这个文件是否是"重新生成缩略图"支持的类型
+    guessMimeFromExtension(filename) {
+      const ext = (filename || '').split('.').pop().toLowerCase();
+      return EXT_MIME_MAP[ext] || null;
+    },
+
+    canRegenerateThumbnail(key) {
+      return !!this.guessMimeFromExtension(key);
+    },
+
+    // 为已存在的文件重新生成缩略图，不需要重新上传整个文件。
+    // 流程：下载原始文件内容（用于本地截图/取帧）→ 本地生成新缩略图 →
+    // 上传缩略图小文件 → 调用轻量的元数据修复接口，把新缩略图摘要写回原文件，
+    // 顺带修复很多旧文件缺失的 content-type（这是"部分视频缩略图显示不出来"
+    // 更根本的原因：旧版普通 PUT 上传从未存储过 content-type）。
+    async regenerateThumbnail(file) {
+      if (!this.canWrite) {
+        this.showPermissionDialog('重新生成缩略图');
+        return;
+      }
+      this.showContextMenu = false;
+
+      const key = file.key || file;
+      const fileName = key.split('/').pop();
+      const guessedType = this.guessMimeFromExtension(fileName);
+
+      if (!guessedType) {
+        this.showCustomToast('该文件类型不支持生成缩略图', 'warning');
+        return;
+      }
+
+      try {
+        this.showCustomToast('正在重新生成缩略图...', 'info');
+
+        // 下载原始文件内容。注意：这里强制用文件名后缀推断出的真实类型
+        // 覆盖 fetch 返回的 Content-Type——很多旧文件此前上传时从未存储过
+        // content-type，/raw/ 对它们返回的 Content-Type 本身就是缺失/错误的，
+        // 不能直接拿来判断"这是图片还是视频"。
+        const response = await fetch(`/raw/${key}`);
+        if (!response.ok) throw new Error(`下载原文件失败: HTTP ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        const blobWithCorrectType = new Blob([arrayBuffer], { type: guessedType });
+
+        const thumbnailBlob = await generateThumbnail(blobWithCorrectType);
+        if (!thumbnailBlob) throw new Error('未能从文件中生成缩略图');
+
+        const digestHex = await blobDigest(thumbnailBlob);
+
+        // 上传新生成的缩略图小文件
+        await axios.put(`/api/write/items/_$flaredrive$/thumbnails/${digestHex}.png`, thumbnailBlob);
+
+        // 用轻量的元数据修复接口，把新缩略图摘要 + 正确的 content-type
+        // 写回原文件，全程不需要把原始文件内容重新上传一遍
+        await axios.post(`/api/write/items/${key}?fixMetadata`, {
+          thumbnail: digestHex,
+          contentType: guessedType,
+        });
+
+        await this.fetchFiles();
+        this.showCustomToast(`"${fileName}" 的缩略图已重新生成`, 'success');
+      } catch (error) {
+        const status = error?.response?.status;
+        if (error.isAuthError || status === 401 || status === 403) {
+          this.showPermissionDialog('重新生成缩略图');
+          return;
+        }
+        console.error('重新生成缩略图失败:', error);
+        this.showCustomToast('重新生成缩略图失败: ' + (error.message || '未知错误'), 'error');
       }
     },
 

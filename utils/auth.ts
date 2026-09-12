@@ -1,5 +1,44 @@
 import { verifyD1Credentials, hasD1 } from "./d1auth";
 
+// 通用的、与具体 URL 结构无关的路径权限检查：给定任意路径和"是否需要写权限"，
+// 判断当前请求（Basic Auth 账户，或匿名访客）是否有权限访问。
+// 供 WebDAV 等按任意路径读写的场景复用，避免像 get_auth_status 那样
+// 依赖 "/api/write/items/" 这种固定的 URL 前缀来提取路径。
+export async function checkPathPermission(context, path: string, needWrite: boolean): Promise<boolean> {
+    // 访客权限：默认按只读处理，除非管理员把 GUEST 显式配置为 "*"
+    // （"*" 本身就代表完全权限，会命中下面循环里的 "*" 分支）。
+    const guestEnv = context.env["GUEST"] || context.env["guest"];
+    if (guestEnv) {
+        const allowGuest = guestEnv.split(",");
+        for (const a of allowGuest) {
+            if (a === "*") return true;
+            if (!needWrite && path.startsWith(a)) return true;
+        }
+    }
+
+    const headers = new Headers(context.request.headers);
+    const authHeader = headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Basic ")) return false;
+
+    let account: string;
+    try {
+        account = atob(authHeader.split("Basic ")[1]);
+    } catch {
+        return false;
+    }
+    if (!account) return false;
+
+    const userInfo = await resolveAccount(account, context);
+    if (!userInfo.exists) return false;
+    if (needWrite && userInfo.isReadOnly) return false;
+
+    for (const a of userInfo.permissions) {
+        if (a === "*") return true;
+        if (path.startsWith(a)) return true;
+    }
+    return false;
+}
+
 // 解析并校验 "username:password" 账户信息。
 // 优先查询 D1 数据库中的账户（密码经过校验），
 // 如果没有配置 D1 或者 D1 中不存在该用户，则回退到旧版的环境变量账户
