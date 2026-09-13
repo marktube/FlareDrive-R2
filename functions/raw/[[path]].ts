@@ -18,21 +18,54 @@ function isDangerousContentType(contentType: string | null): boolean {
   return DANGEROUS_CONTENT_TYPES.includes(base);
 }
 
+// 根据请求到的 R2Range 和对象总大小，算出 Content-Range 响应头里的
+// "bytes <start>-<end>/<size>"。注意 R2 绑定实际的 R2Range 类型是
+// { offset, length? } | { offset?, length } | { suffix }，并没有现成的
+// "end" 字段，需要自己根据 offset/length/suffix 换算出结束字节的下标。
+function formatContentRange(range: any, size: number): string {
+  let start: number;
+  let end: number;
+
+  if (typeof range?.suffix === "number") {
+    // "bytes=-N"：最后 N 个字节
+    start = Math.max(0, size - range.suffix);
+    end = size - 1;
+  } else {
+    start = typeof range?.offset === "number" ? range.offset : 0;
+    end =
+      typeof range?.length === "number"
+        ? start + range.length - 1
+        : size - 1;
+  }
+
+  return `bytes ${start}-${end}/${size}`;
+}
+
 export async function onRequestGet(context) {
   const [bucket, path] = parseBucketPath(context);
   if (!bucket) return notFound();
-  const url = context.env["PUBURL"] + "/" + context.request.url.split("/raw/")[1]
 
-  var response =await fetch(new Request(url, {
-    body: context.request.body,
-    headers: context.request.headers,
-    method: context.request.method,
-    redirect: "follow",
-}))
+  const request: Request = context.request;
 
+  // 直接用 R2 绑定读取对象，不再依赖桶的公开访问地址（env["PUBURL"]）。
+  // R2 绑定原生支持按 Range 分段读取（视频拖动进度条、"重新生成缩略图"功能
+  // 靠这个才能不用整份下载大文件就能截取到某一帧），也支持 onlyIf 条件请求
+  // （配合 ETag 做 304 缓存）——这些能力和走公开 URL 代理时是一样的，
+  // 不会丢失任何功能，同时不再需要把整个存储桶暴露成任何人都能直接访问的
+  // 公开地址。
+  const object = await bucket.get(path, {
+    range: request.headers,
+    onlyIf: request.headers,
+  });
 
-  const headers = new Headers(response.headers);
-  if (path.startsWith("_$flaredrive$/thumbnails/")){
+  if (!object) return notFound();
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("Accept-Ranges", "bytes");
+
+  if (path.startsWith("_$flaredrive$/thumbnails/")) {
     headers.set("Cache-Control", "max-age=31536000");
   }
 
@@ -47,14 +80,24 @@ export async function onRequestGet(context) {
   headers.set("Content-Security-Policy", "sandbox");
   // 3) 对天然就是"可执行文档"的内容类型（html/xhtml/svg/xml），额外强制下载，
   //    双重保险，即使未来某个浏览器对 CSP sandbox 的直接导航支持有缺陷也不受影响。
-  const contentType = headers.get("Content-Type") || response.headers.get("content-type");
+  const contentType = headers.get("Content-Type");
   if (isDangerousContentType(contentType)) {
     headers.set("Content-Disposition", "attachment");
   }
 
-  return new Response(response.body, {
-    headers: headers,
-    status: response.status,
-    statusText: response.statusText
-});
+  // onlyIf 条件没有通过（比如 If-None-Match 命中了当前 etag）时，R2 绑定的
+  // 约定是返回一个没有 body 的 R2Object，而不是抛错或返回 null——这时应该
+  // 回 304，让浏览器直接用本地缓存，不用再传一次内容。
+  if (!("body" in object) || !object.body) {
+    return new Response(null, { status: 304, headers });
+  }
+
+  // 请求带了 Range 头、且 R2 确实按范围返回了部分内容时，回 206 + Content-Range。
+  const rangeHeader = request.headers.get("range");
+  if (rangeHeader && object.range) {
+    headers.set("Content-Range", formatContentRange(object.range, object.size));
+    return new Response(object.body, { headers, status: 206 });
+  }
+
+  return new Response(object.body, { headers, status: 200 });
 }
