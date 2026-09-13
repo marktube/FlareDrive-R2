@@ -10,8 +10,11 @@ function json(obj: unknown, status: number) {
 
 // POST /api/auth/register
 // 管理员专用接口，用于在 D1 数据库中创建新账户。
-// 请求头需要携带管理员的 Basic Authorization（可以是 D1 管理员，也可以是旧版
-// 环境变量里配置的 "user:pass=*" 管理员，方便从环境变量账户平滑过渡到 D1）。
+// 请求头需要携带管理员的 Basic Authorization——这里的"管理员"专指 D1 里
+// is_admin=1 的账户，环境变量账户不再具备任何账户管理能力（即使配置了
+// "*" 权限也不行，那只代表文件读写权限，和账户管理是两回事）。
+// 第一个管理员账户必须直接用 wrangler d1 命令写入数据库，见仓库
+// scripts/create-admin-sql.js 和 README「配置 D1 数据库账户体系」一节。
 // Body: { "username": "...", "password": "...", "permissions": ["dir1/", "dir2/"] | "*", "isReadOnly"?: boolean, "isAdmin"?: boolean }
 //
 // 注意：permissions 里的 "*"（全部目录读写权限）和 isAdmin（能管理账户系统，

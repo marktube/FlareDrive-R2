@@ -228,7 +228,9 @@ BUCKET
 
 - ✅ 用户可以**自助修改密码**，无需管理员改环境变量、重新部署
 - ✅ 密码使用 PBKDF2-SHA256 加盐哈希存储，不落明文
-- ✅ 登录时优先查询 D1，查不到再自动回退到旧版环境变量账户，**两种方式可以混用，完全向后兼容**
+- ✅ 登录时优先查询 D1，查不到再自动回退到旧版环境变量账户，**文件读写权限层面两种方式可以混用，完全向后兼容**
+
+⚠️ **账户管理权限（管理员）和文件权限是两回事**：环境变量账户不管配置了什么权限（哪怕是 `"*"`），都**不具备**调用 `/api/auth/register`、`/api/auth/unban`、`/api/auth/ban-status` 这些管理接口的能力——这些接口只认 D1 数据库里 `is_admin = 1` 的账户。第一个管理员账户需要直接用 `wrangler d1` 命令写入数据库，见下面 6.4。
 
 #### 6.1 创建 D1 数据库
 
@@ -256,25 +258,38 @@ wrangler d1 execute flaredrive-users --file=./migrations/0001_create_users.sql -
 
 `flaredrive-users` 替换成你实际的数据库名称。
 
-#### 6.4 创建第一个 D1 账户
+#### 6.4 创建第一个管理员账户
 
-D1 里还没有任何账户时，无法直接注册（`/api/auth/register` 接口本身也需要一个管理员身份才能调用）。推荐用你在第 3 步配置的**环境变量管理员账户**（例如 `admin:123456=*`）来创建第一批 D1 账户，这样可以平滑过渡：
+D1 里还没有任何账户时无法直接调用 `/api/auth/register`（它本身要求调用者已经是管理员）。**第一个管理员账户必须直接用 `wrangler d1` 命令写进数据库**，不再依赖环境变量账户来"引导"——因为数据库里的密码是加盐哈希存的，没法手写一条 SQL 就把明文密码塞进去，仓库自带了一个小脚本帮你算出正确的哈希：
+
+```bash
+node scripts/create-admin-sql.js admin "一个强密码" > admin.sql
+wrangler d1 execute flaredrive-users --file=./admin.sql --remote
+rm admin.sql   # 里面包含密码哈希，用完记得删掉
+```
+
+- 第二个参数是密码，第三个参数（可选）是权限，默认 `"*"`（全部目录）
+- 加 `--readonly` 参数可以创建只读管理员（能管理账户，但不能写文件）
+- `flaredrive-users` 换成你实际的数据库名称
+
+登录这个账户之后，就可以用它调用 `/api/auth/register` 创建更多账户了：
 
 ```bash
 curl -X POST https://你的域名/api/auth/register \
-  -H "Authorization: Basic $(echo -n 'admin:123456' | base64)" \
+  -H "Authorization: Basic $(echo -n 'admin:一个强密码' | base64)" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "alice",
     "password": "至少6位的密码",
     "permissions": ["personal/", "work/"],
-    "isReadOnly": false
+    "isReadOnly": false,
+    "isAdmin": false
   }'
 ```
 
-- `permissions` 传 `["*"]` 表示管理员（拥有全部目录权限）
+- `permissions` 只代表文件目录权限，传 `["*"]` 表示能读写所有目录，**不代表管理员**
+- `isAdmin` 为 `true` 时才会创建出真正的管理员账户（能调用 register/unban/ban-status），只有调用者自己已经是管理员时才生效，默认为 `false`
 - `isReadOnly` 为 `true` 时创建只读账户
-- 之后也可以直接用某个已存在的 D1 管理员账户（`isAdmin` 为真）来调用该接口创建更多用户
 
 **用户名重复时**，接口会返回 `409 Conflict` 和如下结构，方便前端直接判断并提示：
 
@@ -314,9 +329,9 @@ curl -X POST https://你的域名/api/auth/change-password \
 3. **游客缩略图写入范围过大**：只要配置了 `GUEST` 环境变量（不论允许哪些目录），未登录用户此前都能写入共享的 `_$flaredrive$/thumbnails/` 目录。现在缩略图路径和普通文件一样，按 `GUEST` 配置的具体目录做匹配，需要显式在 `GUEST` 里加上该路径（或 `*`）才允许游客写入。
 4. **Basic Auth 凭据被跨站请求利用的风险**：写操作接口此前在 401 响应里带有 `WWW-Authenticate` 头，会导致浏览器弹出原生登录框并缓存凭据，而缓存后的 Basic 凭据会被浏览器自动附加到**任意来源**发起的同域请求上，构成 CSRF 隐患。现已移除该响应头，并为 `PUT`/`POST`/`DELETE` 增加了 `Origin` 同源校验（仅在请求带有 `Origin` 且与当前域名不一致时才拒绝，不影响 curl 等不带 `Origin` 头的合法调用）。
 5. **权限校验路径与实际写入路径解码方式不一致**、以及仓库里附带的 `test-permission.html` / `test-login-limit.html` 调试页面此前会被一起部署到线上、且没有任何鉴权：已将权限校验路径改为与实际写入路径一致的解码方式，并移除了这两个调试页面（如果你本地还需要用它们做权限测试，可以从 Git 历史中找回，但不建议再部署到线上）。
-6. **D1 账户越权成为管理员（严重）**：`isAdmin` 之前的判断逻辑是 `is_admin 列 || permissions 包含 "*"`。由于 `is_admin` 列此前从来没有任何代码路径会把它设成 1（`/api/auth/register` 一直硬编码 `isAdmin: false`），这个 `||` 分支实际上是 D1 账户唯一能拿到管理员权限的途径——只要给某个账户配置了 `"*"` 目录权限（哪怕它同时被标成 `isReadOnly: true`，本意只是"能看所有目录但不能写"），它就会被当成真正的管理员，能调用 `/api/auth/register`、`/api/auth/unban`、`/api/auth/ban-status` 这些本该只有管理员才能用的接口，创建新账户、封禁/解封用户。现在 `isAdmin` 只看 `is_admin` 这一个独立字段，不再和目录权限挂钩；`/api/auth/register` 也相应新增了一个显式的 `isAdmin` 字段（只有调用者本身已经是真正的管理员时才生效），作为创建 D1 管理员账户的正规途径。
+6. **D1 账户越权成为管理员（严重）**：`isAdmin` 之前的判断逻辑是 `is_admin 列 || permissions 包含 "*"`。由于 `is_admin` 列此前从来没有任何代码路径会把它设成 1（`/api/auth/register` 一直硬编码 `isAdmin: false`），这个 `||` 分支实际上是 D1 账户唯一能拿到管理员权限的途径——只要给某个账户配置了 `"*"` 目录权限（哪怕它同时被标成 `isReadOnly: true`，本意只是"能看所有目录但不能写"），它就会被当成真正的管理员，能调用 `/api/auth/register`、`/api/auth/unban`、`/api/auth/ban-status` 这些本该只有管理员才能用的接口，创建新账户、封禁/解封用户。现在 `isAdmin` 只看 `is_admin` 这一个独立字段，不再和目录权限挂钩，也**不再允许环境变量账户具备任何账户管理能力**（哪怕配置了 `"*"`）——管理员权限现在完全只属于 D1 里 `is_admin = 1` 的账户，第一个管理员账户需要直接用 `wrangler d1` 命令写入数据库（见「配置 D1 数据库账户体系」6.4 节和仓库自带的 `scripts/create-admin-sql.js`），之后才能用它通过 `/api/auth/register` 的 `isAdmin: true` 字段创建更多管理员。
 
-   ⚠️ **如果你已经部署过 D1 账户体系，请务必检查**：升级后，任何此前依赖"给账户配置 `*` 权限"来获得管理员能力的 D1 账户，都会**立刻失去**调用上述管理接口的权限。如果你确实需要某个账户保留管理员能力，请用你的环境变量管理员账户（或另一个真正的管理员账户）重新调用一次 `/api/auth/register` 的 `isAdmin: true`（用户名相同会提示已存在，需要先手动删除该行或直接用下面的 SQL 方式），或者直接执行：
+   ⚠️ **如果你已经部署过 D1 账户体系，请务必检查**：升级后，任何此前依赖"给账户配置 `*` 权限"来获得管理员能力的 D1 账户，都会**立刻失去**调用上述管理接口的权限，而且**不能再用环境变量账户去重新授予**（环境变量账户现在完全没有管理员能力了）。如果你确实需要某个账户保留管理员能力，直接执行：
    ```bash
    wrangler d1 execute <YOUR_DB_NAME> --command="UPDATE users SET is_admin = 1 WHERE username = '你的账户名'" --remote
    ```

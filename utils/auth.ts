@@ -80,7 +80,12 @@ export async function resolveAccount(account, context) {
         exists: !!permissions,
         permissions: permissions || [],
         isReadOnly: isReadOnly,
-        isAdmin: !!permissions && permissions.includes("*"),
+        // 按照新设计，"能管理账户系统"（创建新账户、封禁/解封用户）这件事
+        // 只应该来自 D1 里显式的 is_admin=1 账户，不再允许通过环境变量账户
+        // 间接获得管理员能力——即便某个环境变量账户被配置了 "*" 权限，
+        // 那也只代表"能读写所有目录"，和账户管理系统完全是两回事。
+        // 环境变量账户现在纯粹是历史遗留的文件读写权限账户。
+        isAdmin: false,
         actualAccount: account,
         username,
         source: "env"
