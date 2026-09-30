@@ -3358,6 +3358,8 @@ body:has(.mobile-paste-toolbar) {
 
 /* 文件操作工具栏样式 */
 .file-toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -3395,13 +3397,21 @@ body:has(.mobile-paste-toolbar) {
 .toolbar-left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
+  min-width: 0;
 }
 
 .toolbar-right {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+}
+
+.toolbar-btn > svg {
+  flex-shrink: 0;
 }
 
 .toolbar-btn {
@@ -3414,6 +3424,8 @@ body:has(.mobile-paste-toolbar) {
   border-radius: 6px;
   color: white;
   font-size: 13px;
+  white-space: nowrap;
+  max-width: 100%;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -3485,7 +3497,9 @@ body:has(.mobile-paste-toolbar) {
 
 /* 兼容不支持:has()的浏览器 */
 @supports not (selector(:has(.file-checkbox))) {
-  .file-item .file-checkbox ~ * {
+  /* 只给紧跟在复选框后的图标加左边距(旧版 Android WebView 不支持 :has())。
+     之前用 ~ 会给所有后续兄弟元素都加 32px，把文字区域整体撑出边框。 */
+  .file-item .file-checkbox + * {
     margin-left: 32px;
   }
 }

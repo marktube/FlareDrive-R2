@@ -6,6 +6,12 @@ svg {
   overflow: unset !important;
 }
 
+html {
+  /* 禁止部分 Android 浏览器对文字做自动放大(font boosting)，否则文字变大后会撑出固定尺寸的边框 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html,
 body,
 #app {
@@ -76,6 +82,7 @@ input[type="search"] {
 }
 .file-item {
   width: 100%;
+  min-width: 0;
   height: 64px;
   padding: 0 8px;
   transition: background-color 0.2s ease-in-out;
@@ -95,14 +102,18 @@ input[type="search"] {
 }
 
 .file-info-container {
-  width: 100%;
+  /* 之前是 width:100% 且图标不收缩，总宽度 = 100% + 图标宽度，会撑出列表项边框 */
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
-  max-width: 100%;
 }
 
 .file-name,
 .contextmenu-filename {
   display: block;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 23px;
   height: 23px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -111,13 +122,17 @@ input[type="search"] {
 
 .contextmenu-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.contextmenu-list > li {
+  min-width: 0;
 }
 
 @media screen and (max-width: 600px) {
   .contextmenu-list {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   } 
 }
 
@@ -199,6 +214,23 @@ button.circle {
   transition: background-color 0.2s ease-in-out;
   font-size: inherit;
   justify-content: center;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.contextmenu-list > li > * > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextmenu-list > li > * > svg,
+.contextmenu-list > li > * > img {
+  flex-shrink: 0;
 }
 
 .contextmenu-list > li > *:hover {
@@ -497,6 +529,12 @@ button {
   white-space: nowrap;
   flex-shrink: 0;
   min-width: 0;
+  overflow: hidden;
+}
+
+.user-status-button > svg,
+.user-status-button > img {
+  flex-shrink: 0;
 }
 
 .user-status-button:hover {
@@ -507,9 +545,11 @@ button {
 .user-status-text {
   color: #333;
   font-weight: 500;
+  min-width: 0;
   overflow: hidden;
   padding-bottom: 2px;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 移动端用户状态按钮优化 */
@@ -737,4 +777,12 @@ input[type="search"].search-input {
 .readonly-notice p {
   margin: 0;
   font-size: 16px;
+}
+
+/* 列表项内的图标不参与收缩，文字区域(.file-info-container)负责收缩并省略 */
+.file-item > svg,
+.file-item > img,
+.file-item > .file-icon {
+  flex-shrink: 0;
+  max-width: none;
 }
