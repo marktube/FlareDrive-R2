@@ -83,8 +83,10 @@ input[type="search"] {
 .file-item {
   width: 100%;
   min-width: 0;
-  height: 64px;
-  padding: 0 8px;
+  /* 固定 height 会在系统字体放大时让文字溢出下边框；改为最小高度，内容多高行就多高 */
+  height: auto;
+  min-height: 64px;
+  padding: 6px 8px;
   transition: background-color 0.2s ease-in-out;
   display: flex;
   align-items: center;
@@ -116,8 +118,8 @@ input[type="search"] {
   /* 没有显式字号时继承浏览器默认 16px，Android 系统"字体大小"调大后文件名会跟着变得很大。
      这里显式限定：随屏宽缩放，但上下限固定，行高同步，避免撑破 64px 高的列表项 */
   font-size: clamp(13px, 3.8vw, 15px);
-  line-height: 23px;
-  height: 23px;
+  line-height: 1.5;
+  height: auto;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -789,14 +791,4 @@ input[type="search"].search-input {
 .file-item > .file-icon {
   flex-shrink: 0;
   max-width: none;
-}
-
-/* 窄屏/系统字体放大时：缩小列表项内的字，并允许行高自适应而不是固定 64px */
-@media (max-width: 480px) {
-  .file-item {
-    height: auto;
-    min-height: 64px;
-    padding-top: 4px;
-    padding-bottom: 4px;
-  }
 }
