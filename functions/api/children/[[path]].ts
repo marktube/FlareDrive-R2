@@ -6,10 +6,10 @@ import {
   getGuestDirs,
   isSafeKey,
   INTERNAL_PREFIX,
-  THUMBNAIL_PREFIX,
   FOLDER_MARKER,
 } from "@/utils/auth";
 import { signToken, sessionTokenExpiry } from "@/utils/signing";
+import { thumbnailKeyForDigest } from "@/utils/thumbnails";
 
 const MAX_PAGES = 20; // 每页最多 1000 个对象
 
@@ -83,11 +83,21 @@ export async function onRequestGet(context) {
       .filter((folder) => !folder.startsWith(INTERNAL_PREFIX))
       .filter((folder) => userCanTraverse(user, env, folder));
 
-    // 应用内读取 /raw/ 用的签名令牌：覆盖缩略图目录；
-    // 如果当前账户对这个目录本身有读权限，再加上这个目录。
-    const scopes = [THUMBNAIL_PREFIX];
-    if (user && userCanRead(user, env, prefix)) scopes.push(prefix);
     const expires = sessionTokenExpiry();
+    // #13：缩略图令牌不再覆盖整个缩略图目录。此前 rawToken 的 p 里固定带
+    // THUMBNAIL_PREFIX，匿名列一次访客目录就能拿到可读全部缩略图的令牌
+    // （私密文件的缩略图只差一个摘要）；现在每个文件自带只对自己的缩略
+    // 图有效的令牌（f = 精确 key），rawToken 只保留当前目录前缀。
+    await Promise.all(
+      value.map(async (file) => {
+        const thumbKey = thumbnailKeyForDigest(file.customMetadata?.thumbnail);
+        if (thumbKey) file.thumbToken = await signToken(env, bucket, { e: expires, f: thumbKey });
+      }),
+    );
+
+    // 应用内读取 /raw/ 用的签名令牌：只覆盖当前目录（登录且有读权限时）。
+    const scopes = [];
+    if (user && userCanRead(user, env, prefix)) scopes.push(prefix);
     const rawToken = await signToken(env, bucket, { e: expires, p: scopes });
 
     return json({
@@ -98,7 +108,7 @@ export async function onRequestGet(context) {
       truncated,
       marker: truncated ? cursor : null,
       rawToken,
-      rawTokenPrefix: scopes.length > 1 ? prefix : null,
+      rawTokenPrefix: scopes.length > 0 ? prefix : null,
       rawTokenExpires: expires,
     });
   } catch (e) {

@@ -373,7 +373,7 @@
               <input type="checkbox" :checked="isFileSelected(file.key)" @click.stop @change.stop="toggleFileSelection(file.key)">
             </div>
             <MimeIcon :content-type="file.httpMetadata?.contentType || 'application/octet-stream'" :thumbnail="file.customMetadata?.thumbnail
-              ? thumbnailUrl(file.customMetadata.thumbnail)
+              ? thumbnailUrl(file)
               : null
               " />
             <div class="file-info-container">
@@ -905,7 +905,6 @@ export default {
     centerProgress: { visible: false, text: '', fileName: '' },
     // /raw/ 读取用的签名令牌：由文件列表接口随目录内容一起下发
     rawTokens: [],
-    thumbToken: '',
     // 多选功能相关
     selectedFiles: [], // 选中的文件列表
     isMultiSelectMode: false, // 是否处于多选模式
@@ -1097,7 +1096,6 @@ export default {
     // 记录文件列表接口下发的签名令牌
     registerRawToken(data) {
       if (!data || !data.rawToken) return;
-      this.thumbToken = data.rawToken;
       if (typeof data.rawTokenPrefix === 'string') {
         const rest = this.rawTokens.filter(t => t.prefix !== data.rawTokenPrefix).slice(-500);
         rest.push({ prefix: data.rawTokenPrefix, token: data.rawToken });
@@ -1116,9 +1114,13 @@ export default {
       return best ? `${base}?token=${best.token}` : base;
     },
 
-    thumbnailUrl(digest) {
+    // #13：缩略图用文件自带的逐文件令牌（children 下发），不再共用覆盖
+    // 整个缩略图目录的 rawToken。
+    thumbnailUrl(file) {
+      const digest = file.customMetadata?.thumbnail;
+      if (!digest) return '';
       const base = `/raw/_$flaredrive$/thumbnails/${digest}.png`;
-      return this.thumbToken ? `${base}?token=${this.thumbToken}` : base;
+      return file.thumbToken ? `${base}?token=${file.thumbToken}` : base;
     },
 
     // 该文件是否在访客目录（GUEST）下：访客目录本来就是公开可读的，
